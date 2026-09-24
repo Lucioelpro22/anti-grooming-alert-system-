@@ -1,4 +1,5 @@
 import uuid
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -60,7 +61,7 @@ CONCLUSIONES
     else:
         contenido += """✅ Sin indicadores de riesgo detectados"""
 
-    contenido += f"""
+    contenido += """
 ----------------------------------------------------------------------
 Documento generado por Sistema Anti-Grooming
 NO SUSTITUYE DENUNCIA FORMAL ANTE AUTORIDADES
@@ -72,6 +73,9 @@ NO SUSTITUYE DENUNCIA FORMAL ANTE AUTORIDADES
     return informe_id
 
 def leer_informe(informe_id: str) -> dict:
-    for archivo in CARPETA_INFORMES.glob(f"*{informe_id}*"):
-        return {"id": informe_id, "contenido": archivo.read_text(encoding="utf-8")}
-    return {}
+    if not re.fullmatch(r"[0-9a-f]{8}", informe_id):
+        return {}
+    archivo = CARPETA_INFORMES / f"informe_{informe_id}.txt"
+    if not archivo.is_file():
+        return {}
+    return {"id": informe_id, "contenido": archivo.read_text(encoding="utf-8")}
