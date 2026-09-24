@@ -6,7 +6,9 @@ from api.report_generator import leer_informe
 
 
 def test_critical_multi_indicator_message():
-    assert evaluar_texto("dime tu edad no le cuentes a nadie")["nivel_riesgo"] == "CRÍTICO"
+    assert (
+        evaluar_texto("dime tu edad no le cuentes a nadie")["nivel_riesgo"] == "CRÍTICO"
+    )
 
 
 def test_critical_photo_request():
@@ -39,5 +41,5 @@ def test_ip_validation():
 def test_report_reader_rejects_path_and_glob_injection(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     Path("informes_generados").mkdir()
-    Path("informes_generados/informe_safe.txt").write_text("secret", encoding="utf-8")
+    Path("informes_generados/informe_safe.enc").write_bytes(b"secret")
     assert leer_informe("../*", requester="analyst") == {}

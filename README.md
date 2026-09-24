@@ -34,11 +34,16 @@ Software de ciberseguridad diseñado para detectar, identificar y documentar con
 🔗 Autor: @Lucioelpro22
 📅 Versión: 1.0.0
 
-## Seguridad V3
+## Seguridad V3.1
 
 La API usa OAuth2 con tokens JWT de corta duración, contraseñas Argon2 y roles
 `admin`, `analyst` y `auditor`. Los informes quedan vinculados a su creador; solo
 su propietario, un administrador o un auditor pueden consultarlos.
+
+Los informes se almacenan cifrados con AES-256-GCM. Sus metadatos están
+autenticados y cada creación, lectura o acceso denegado se registra en una
+cadena de auditoría firmada con HMAC-SHA256. Las escrituras son atómicas y el
+servicio falla de forma segura si detecta una alteración o una clave inválida.
 
 Antes de iniciar la API:
 
@@ -46,6 +51,8 @@ Antes de iniciar la API:
 2. Generá `JWT_SECRET` con `openssl rand -hex 32`.
 3. Generá hashes con `python scripts/hash_password.py`.
 4. Definí los usuarios en `AUTH_USERS_JSON` usando únicamente hashes Argon2.
+5. Ejecutá `python scripts/generate_security_keys.py` y guardá las dos claves
+   generadas en `EVIDENCE_ENCRYPTION_KEY` y `AUDIT_HMAC_KEY`. Deben ser distintas.
 
 No hay credenciales predeterminadas y el servicio falla de forma segura si la
 configuración de autenticación está ausente o es inválida.
