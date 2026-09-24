@@ -1,3 +1,4 @@
+import base64
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,6 +14,8 @@ from api.auth import JWT_AUDIENCE, JWT_ISSUER
 
 
 PASSWORD = "correct-horse-battery-staple"  # pragma: allowlist secret
+EVIDENCE_KEY = base64.urlsafe_b64encode(b"e" * 32).decode("ascii")
+AUDIT_KEY = base64.urlsafe_b64encode(b"a" * 32).decode("ascii")
 
 
 @pytest.fixture()
@@ -41,6 +44,8 @@ def client(monkeypatch, tmp_path):
     ]
     monkeypatch.setenv("JWT_SECRET", "test-secret-that-is-longer-than-32-bytes")
     monkeypatch.setenv("AUTH_USERS_JSON", json.dumps(users))
+    monkeypatch.setenv("EVIDENCE_ENCRYPTION_KEY", EVIDENCE_KEY)
+    monkeypatch.setenv("AUDIT_HMAC_KEY", AUDIT_KEY)
     monkeypatch.setattr(report_generator, "CARPETA_INFORMES", tmp_path)
     LOGIN_LIMITER._failures.clear()
     from api.main import app
@@ -86,7 +91,9 @@ def test_analyst_can_create_and_read_own_report(client):
 
 def test_analyst_cannot_read_another_analysts_report(client):
     created = client.post(
-        "/analizar-mensaje", json=message_payload(), headers=headers(client, "analyst-a")
+        "/analizar-mensaje",
+        json=message_payload(),
+        headers=headers(client, "analyst-a"),
     )
     report_id = created.json()["informe_id"]
     response = client.get(f"/informe/{report_id}", headers=headers(client, "analyst-b"))
@@ -95,23 +102,36 @@ def test_analyst_cannot_read_another_analysts_report(client):
 
 def test_auditor_can_read_but_cannot_create(client):
     created = client.post(
-        "/analizar-mensaje", json=message_payload(), headers=headers(client, "analyst-a")
+        "/analizar-mensaje",
+        json=message_payload(),
+        headers=headers(client, "analyst-a"),
     )
     report_id = created.json()["informe_id"]
     auditor_headers = headers(client, "auditor")
-    assert client.get(f"/informe/{report_id}", headers=auditor_headers).status_code == 200
     assert (
-        client.post("/analizar-mensaje", json=message_payload(), headers=auditor_headers).status_code
+        client.get(f"/informe/{report_id}", headers=auditor_headers).status_code == 200
+    )
+    assert (
+        client.post(
+            "/analizar-mensaje", json=message_payload(), headers=auditor_headers
+        ).status_code
         == 403
     )
 
 
 def test_admin_can_read_any_report(client):
     created = client.post(
-        "/analizar-mensaje", json=message_payload(), headers=headers(client, "analyst-a")
+        "/analizar-mensaje",
+        json=message_payload(),
+        headers=headers(client, "analyst-a"),
     )
     report_id = created.json()["informe_id"]
-    assert client.get(f"/informe/{report_id}", headers=headers(client, "admin")).status_code == 200
+    assert (
+        client.get(
+            f"/informe/{report_id}", headers=headers(client, "admin")
+        ).status_code
+        == 200
+    )
 
 
 def test_tampered_token_is_rejected(client):
@@ -152,9 +172,15 @@ def test_missing_jwt_secret_fails_closed(client, monkeypatch):
 
 def test_login_rate_limit(client):
     for _ in range(5):
-        response = client.post("/token", data={"username": "blocked", "password": "wrong"})
+        response = client.post(
+            "/token",
+            data={"username": "blocked", "password": "wrong"},  # pragma: allowlist secret
+        )
         assert response.status_code == 401
-    response = client.post("/token", data={"username": "blocked", "password": "wrong"})
+    response = client.post(
+        "/token",
+        data={"username": "blocked", "password": "wrong"},  # pragma: allowlist secret
+    )
     assert response.status_code == 429
 
 
@@ -167,7 +193,76 @@ def test_extra_message_fields_are_rejected(client):
 
 
 def test_corrupt_report_metadata_fails_closed(client, tmp_path):
-    Path(tmp_path, "informe_deadbeef.txt").write_text("sensitive", encoding="utf-8")
-    Path(tmp_path, "informe_deadbeef.json").write_text("not-json", encoding="utf-8")
-    response = client.get("/informe/deadbeef", headers=headers(client, "admin"))
+    report_id = "d" * 32
+    Path(tmp_path, f"informe_{report_id}.enc").write_bytes(b"sensitive")
+    Path(tmp_path, f"informe_{report_id}.json").write_text("not-json", encoding="utf-8")
+    response = client.get(f"/informe/{report_id}", headers=headers(client, "admin"))
     assert response.status_code == 404
+
+
+def test_report_is_encrypted_at_rest(client, tmp_path):
+    payload = message_payload() | {"contenido": "frase-secreta-evidencia-123"}
+    response = client.post(
+        "/analizar-mensaje", json=payload, headers=headers(client, "analyst-a")
+    )
+    report_id = response.json()["informe_id"]
+    ciphertext = Path(tmp_path, f"informe_{report_id}.enc").read_bytes()
+    assert b"frase-secreta-evidencia-123" not in ciphertext
+    assert not Path(tmp_path, f"informe_{report_id}.txt").exists()
+
+
+def test_tampered_ciphertext_is_rejected(client, tmp_path):
+    auth = headers(client, "analyst-a")
+    created = client.post("/analizar-mensaje", json=message_payload(), headers=auth)
+    report_id = created.json()["informe_id"]
+    path = Path(tmp_path, f"informe_{report_id}.enc")
+    ciphertext = bytearray(path.read_bytes())
+    ciphertext[0] ^= 1
+    path.write_bytes(ciphertext)
+    assert client.get(f"/informe/{report_id}", headers=auth).status_code == 404
+
+
+def test_tampered_authenticated_metadata_is_rejected(client, tmp_path):
+    auth = headers(client, "analyst-a")
+    created = client.post("/analizar-mensaje", json=message_payload(), headers=auth)
+    report_id = created.json()["informe_id"]
+    path = Path(tmp_path, f"informe_{report_id}.json")
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    metadata["owner"] = "admin"
+    path.write_text(json.dumps(metadata), encoding="utf-8")
+    response = client.get(f"/informe/{report_id}", headers=headers(client, "admin"))
+    assert response.status_code == 404
+
+
+def test_audit_chain_verifies(client):
+    auth = headers(client, "analyst-a")
+    created = client.post("/analizar-mensaje", json=message_payload(), headers=auth)
+    client.get(f"/informe/{created.json()['informe_id']}", headers=auth)
+    verification = report_generator.verificar_auditoria()
+    assert verification["valid"] is True
+    assert verification["entries"] == 2
+
+
+def test_tampered_audit_log_fails_closed(client, tmp_path):
+    auth = headers(client, "analyst-a")
+    created = client.post("/analizar-mensaje", json=message_payload(), headers=auth)
+    report_id = created.json()["informe_id"]
+    audit_path = Path(tmp_path, report_generator.AUDIT_FILENAME)
+    audit_path.write_text(
+        audit_path.read_text(encoding="utf-8").replace(
+            "report_created", "report_deleted"
+        ),
+        encoding="utf-8",
+    )
+    response = client.get(f"/informe/{report_id}", headers=auth)
+    assert response.status_code == 503
+
+
+def test_missing_evidence_key_fails_closed(client, monkeypatch):
+    monkeypatch.delenv("EVIDENCE_ENCRYPTION_KEY")
+    response = client.post(
+        "/analizar-mensaje",
+        json=message_payload(),
+        headers=headers(client, "analyst-a"),
+    )
+    assert response.status_code == 503

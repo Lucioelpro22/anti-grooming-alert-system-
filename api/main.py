@@ -19,8 +19,9 @@ from api.auth import (
 app = FastAPI(
     title="Sistema de Alerta Temprana — Anti-Grooming",
     description="API de detección y documentación de conductas de grooming",
-    version="3.0.0"
+    version="3.1.0",
 )
+
 
 class Mensaje(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -32,12 +33,14 @@ class Mensaje(BaseModel):
     ip_origen: str | None = Field(default=None, max_length=45)
     plataforma: str | None = Field(default=None, max_length=100)
 
+
 class AnalisisRespuesta(BaseModel):
     nivel_riesgo: str
     puntaje: float
     indicadores_detectados: list[str]
     perfil_identificado: str
     informe_id: str
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -71,40 +74,54 @@ async def analizar_mensaje(
 ):
     if not mensaje.fecha_hora:
         mensaje.fecha_hora = datetime.now().isoformat()
-    
+
     resultado_patrones = detect_patterns.evaluar_texto(mensaje.contenido)
-    
+
     datos_ip = {}
     if mensaje.ip_origen:
         datos_ip = ip_analysis.analizar_ip(mensaje.ip_origen)
-    
+
     perfil = detect_patterns.identificar_perfil(resultado_patrones)
-    informe_id = report_generator.crear_informe(
-        mensaje, resultado_patrones, datos_ip, perfil, owner=user.username
-    )
-    
+    try:
+        informe_id = report_generator.crear_informe(
+            mensaje, resultado_patrones, datos_ip, perfil, owner=user.username
+        )
+    except report_generator.EvidenceSecurityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Almacenamiento seguro no disponible",
+        ) from exc
+
     return AnalisisRespuesta(
         nivel_riesgo=resultado_patrones["nivel_riesgo"],
         puntaje=resultado_patrones["puntaje"],
         indicadores_detectados=resultado_patrones["indicadores"],
         perfil_identificado=perfil,
-        informe_id=informe_id
+        informe_id=informe_id,
     )
+
 
 @app.get("/informe/{informe_id}")
 async def obtener_informe(
     informe_id: str,
     user: Annotated[User, Depends(get_current_user)],
 ):
-    informe = report_generator.leer_informe(
-        informe_id,
-        requester=user.username,
-        can_read_all=user.role in {Role.ADMIN, Role.AUDITOR},
-    )
+    try:
+        informe = report_generator.leer_informe(
+            informe_id,
+            requester=user.username,
+            can_read_all=user.role in {Role.ADMIN, Role.AUDITOR},
+        )
+    except report_generator.EvidenceSecurityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Almacenamiento seguro no disponible",
+        ) from exc
     if not informe:
         raise HTTPException(status_code=404, detail="Informe no encontrado")
     return informe
 
+
 @app.get("/estado")
 async def estado():
-    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.0.0"}
+    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.1.0"}
