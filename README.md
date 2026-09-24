@@ -60,5 +60,9 @@ Antes de iniciar la API:
 6. Configurá `ALLOWED_HOSTS_JSON` con los dominios reales del servicio. Solo si
    existe un frontend web, agregá sus orígenes exactos a `ALLOWED_ORIGINS_JSON`.
 
+Cada push a `main` o a una rama de seguridad, y cada Pull Request hacia `main`,
+ejecuta automáticamente las pruebas, formato, lint, tipos, Bandit, pip-audit,
+detect-secrets y revisión de dependencias mediante GitHub Actions.
+
 No hay credenciales predeterminadas y el servicio falla de forma segura si la
 configuración de autenticación está ausente o es inválida.
