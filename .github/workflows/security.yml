@@ -1,0 +1,85 @@
+name: Security and quality
+
+on:
+  push:
+    branches: [main, "security/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-scan:
+    name: Test and security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
+
+      - name: Install runtime and security tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r api/requirements.txt
+          python -m pip install bandit detect-secrets mypy pip-audit pytest ruff
+
+      - name: Check formatting and lint
+        run: |
+          python -m ruff format --check api/main.py api/security.py tests/test_auth_rbac.py scripts
+          python -m ruff check api tests scripts
+
+      - name: Check types
+        run: python -m mypy --cache-dir /tmp/mypy-cache api
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Run Bandit
+        run: python -m bandit -q -r api scripts
+
+      - name: Audit dependencies
+        run: python -m pip_audit -r api/requirements.txt
+
+      - name: Scan repository for secrets
+        shell: bash
+        run: |
+          python -m detect_secrets scan --all-files \
+            --exclude-files '^(\\.git/|\\.mypy_cache/|\\.pytest_cache/|\\.ruff_cache/)' \
+            > /tmp/secrets.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          results = json.loads(Path("/tmp/secrets.json").read_text())["results"]
+          findings = sum(len(matches) for matches in results.values())
+          if findings:
+              raise SystemExit(f"detect-secrets found {findings} potential secret(s)")
+          print("detect-secrets: 0 potential secrets")
+          PY
+
+      - name: Validate patch whitespace
+        run: git diff --check
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
