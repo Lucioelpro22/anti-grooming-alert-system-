@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
 from api import detect_patterns, ip_analysis, report_generator
+from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
 from api.auth import (
     LOGIN_LIMITER,
     Role,
@@ -21,7 +22,7 @@ from api.security import ApiShieldMiddleware, env_list
 app = FastAPI(
     title="Sistema de Alerta Temprana — Anti-Grooming",
     description="API de detección y documentación de conductas de grooming",
-    version="3.2.0",
+    version="3.5.0",
 )
 
 app.add_middleware(
@@ -134,6 +135,28 @@ async def obtener_informe(
     return informe
 
 
+@app.get("/jurisdiccion/{country_code}")
+async def obtener_jurisdiccion(
+    country_code: str,
+    user: Annotated[User, Depends(get_current_user)],
+):
+    del user
+    try:
+        policy = get_policy(country_code)
+    except JurisdictionNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=404, detail="Jurisdicción no configurada"
+        ) from exc
+    return {
+        "code": policy.code,
+        "name": policy.name,
+        "languages": policy.languages,
+        "recommended_retention_days": policy.recommended_retention_days,
+        "reporting_channels": policy.reporting_channels,
+        "cross_border_review_required": policy.cross_border_review_required,
+    }
+
+
 @app.get("/estado")
 async def estado():
-    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.2.0"}
+    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.5.0"}

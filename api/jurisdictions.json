@@ -1,0 +1,37 @@
+{
+  "AR": {
+    "name": "Argentina",
+    "languages": ["es"],
+    "recommended_retention_days": 30,
+    "reporting_channels": ["platform", "local_authority", "child_protection"],
+    "cross_border_review_required": true
+  },
+  "US": {
+    "name": "United States",
+    "languages": ["en", "es"],
+    "recommended_retention_days": 30,
+    "reporting_channels": ["platform", "national_authority", "child_protection"],
+    "cross_border_review_required": true
+  },
+  "BR": {
+    "name": "Brazil",
+    "languages": ["pt"],
+    "recommended_retention_days": 30,
+    "reporting_channels": ["platform", "national_authority", "child_protection"],
+    "cross_border_review_required": true
+  },
+  "GB": {
+    "name": "United Kingdom",
+    "languages": ["en"],
+    "recommended_retention_days": 30,
+    "reporting_channels": ["platform", "national_authority", "child_protection"],
+    "cross_border_review_required": true
+  },
+  "EU": {
+    "name": "European Union (regional profile)",
+    "languages": ["en"],
+    "recommended_retention_days": 30,
+    "reporting_channels": ["platform", "national_authority", "child_protection"],
+    "cross_border_review_required": true
+  }
+}
