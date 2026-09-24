@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
 from api import report_generator
-from api.auth import LOGIN_LIMITER
+from api.auth import LOGIN_LIMITER, TOKEN_REVOCATIONS
 from api.auth import JWT_AUDIENCE, JWT_ISSUER
 from api.security import API_LIMITER
 
@@ -54,7 +54,9 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("API_RATE_WINDOW_SECONDS", "60")
     monkeypatch.setattr(report_generator, "CARPETA_INFORMES", tmp_path)
     LOGIN_LIMITER._failures.clear()
+    TOKEN_REVOCATIONS.clear()
     API_LIMITER.clear()
+    TOKEN_REVOCATIONS.clear()
     from api.main import app
 
     with TestClient(app) as test_client:
@@ -82,6 +84,18 @@ def message_payload():
 
 def test_protected_endpoint_rejects_anonymous(client):
     assert client.post("/analizar-mensaje", json=message_payload()).status_code == 401
+
+
+def test_logout_revokes_token_and_prevents_replay(client):
+    auth = headers(client, "analyst-a")
+    assert client.get("/estado", headers=auth).status_code == 200
+    logout = client.post("/logout", headers=auth)
+    assert logout.status_code == 200
+    assert client.get("/informe/deadbeef", headers=auth).status_code == 401
+
+
+def test_logout_requires_authentication(client):
+    assert client.post("/logout").status_code == 401
 
 
 def test_invalid_password_is_rejected(client):

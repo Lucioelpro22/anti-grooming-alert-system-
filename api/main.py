@@ -15,13 +15,14 @@ from api.auth import (
     create_access_token,
     get_current_user,
     require_roles,
+    revoke_access_token,
 )
 from api.security import ApiShieldMiddleware, env_list
 
 app = FastAPI(
     title="Sistema de Alerta Temprana — Anti-Grooming",
     description="API de detección y documentación de conductas de grooming",
-    version="3.2.0",
+    version="3.4.0",
 )
 
 app.add_middleware(
@@ -113,6 +114,12 @@ async def analizar_mensaje(
     )
 
 
+@app.post("/logout")
+async def logout(user: Annotated[User, Depends(get_current_user)]):
+    revoke_access_token(user)
+    return {"estado": "sesión revocada"}
+
+
 @app.get("/informe/{informe_id}")
 async def obtener_informe(
     informe_id: str,
@@ -136,4 +143,4 @@ async def obtener_informe(
 
 @app.get("/estado")
 async def estado():
-    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.2.0"}
+    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.4.0"}
