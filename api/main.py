@@ -1,5 +1,5 @@
-from typing import Annotated
 from datetime import datetime, timezone
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
 from api import detect_patterns, ip_analysis, report_generator
-from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
 from api.auth import (
     LOGIN_LIMITER,
     Role,
@@ -17,6 +16,7 @@ from api.auth import (
     get_current_user,
     require_roles,
 )
+from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
 from api.security import ApiShieldMiddleware, env_list
 
 app = FastAPI(

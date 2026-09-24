@@ -9,10 +9,8 @@ from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
 from api import report_generator
-from api.auth import LOGIN_LIMITER
-from api.auth import JWT_AUDIENCE, JWT_ISSUER
+from api.auth import JWT_AUDIENCE, JWT_ISSUER, LOGIN_LIMITER
 from api.security import API_LIMITER
-
 
 PASSWORD = "correct-horse-battery-staple"  # pragma: allowlist secret
 EVIDENCE_KEY = base64.urlsafe_b64encode(b"e" * 32).decode("ascii")

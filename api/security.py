@@ -6,8 +6,8 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from starlette.types import Message, Receive, Scope, Send
 
+from starlette.types import Message, Receive, Scope, Send
 
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
