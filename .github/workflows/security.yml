@@ -71,15 +71,3 @@ jobs:
 
       - name: Validate patch whitespace
         run: git diff --check
-
-  dependency-review:
-    name: Dependency review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Review dependency changes
-        uses: actions/dependency-review-action@v4

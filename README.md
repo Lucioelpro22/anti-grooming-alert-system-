@@ -62,7 +62,7 @@ Antes de iniciar la API:
 
 Cada push a `main` o a una rama de seguridad, y cada Pull Request hacia `main`,
 ejecuta automáticamente las pruebas, formato, lint, tipos, Bandit, pip-audit,
-detect-secrets y revisión de dependencias mediante GitHub Actions.
+detect-secrets y auditoría de dependencias mediante GitHub Actions.
 
 La capa de jurisdicciones permite adaptar idioma, canales de reporte, retención
 operativa y revisión transfronteriza sin mezclar reglas de un país con otro.

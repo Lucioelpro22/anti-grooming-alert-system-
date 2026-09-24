@@ -1,5 +1,5 @@
 from typing import Annotated
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -86,7 +86,7 @@ async def analizar_mensaje(
     user: Annotated[User, Depends(require_roles(Role.ADMIN, Role.ANALYST))],
 ):
     if not mensaje.fecha_hora:
-        mensaje.fecha_hora = datetime.now().isoformat()
+        mensaje.fecha_hora = datetime.now(timezone.utc).isoformat()
 
     resultado_patrones = detect_patterns.evaluar_texto(mensaje.contenido)
 

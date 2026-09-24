@@ -2,24 +2,52 @@ import re
 
 PALABRAS_RIESGO = {
     "alta": [
-        "dime tu edad", "cuantos años tienes", "donde vives", "estas sola",
-        "secreto entre nosotros", "no le cuentes a nadie", "nos vemos",
-        "te voy a buscar", "manda foto", "foto tuya", "vestida", "sin ropa",
-        "te quiero conocer", "eres especial", "muy madura para tu edad",
-        "nadie te va a querer como yo", "confia en mi", "somos novios"
+        "dime tu edad",
+        "cuantos años tienes",
+        "donde vives",
+        "estas sola",
+        "secreto entre nosotros",
+        "no le cuentes a nadie",
+        "nos vemos",
+        "te voy a buscar",
+        "manda foto",
+        "foto tuya",
+        "vestida",
+        "sin ropa",
+        "te quiero conocer",
+        "eres especial",
+        "muy madura para tu edad",
+        "nadie te va a querer como yo",
+        "confia en mi",
+        "somos novios",
     ],
     "media": [
-        "que haces", "con quien estas", "tus papas saben", "tu habitacion",
-        "te regalo", "te compro", "dinero", "premio", "juego privado",
-        "amigos solo nosotros", "me cuentas todo", "eres linda", "guapa"
+        "que haces",
+        "con quien estas",
+        "tus papas saben",
+        "tu habitacion",
+        "te regalo",
+        "te compro",
+        "dinero",
+        "premio",
+        "juego privado",
+        "amigos solo nosotros",
+        "me cuentas todo",
+        "eres linda",
+        "guapa",
     ],
     "baja": [
-        "hola guapa", "que bonita", "me caes bien", "hablamos mas tarde",
-        "me gustas", "quiero saber mas de ti"
-    ]
+        "hola guapa",
+        "que bonita",
+        "me caes bien",
+        "hablamos mas tarde",
+        "me gustas",
+        "quiero saber mas de ti",
+    ],
 }
 
 PESOS = {"alta": 1.0, "media": 0.5, "baja": 0.2}
+
 
 def evaluar_texto(texto: str) -> dict:
     texto_min = texto.lower()
@@ -40,15 +68,17 @@ def evaluar_texto(texto: str) -> dict:
     )
     spans_ocupados: list[tuple[int, int]] = []
     for palabra, nivel in candidatos:
-        for coincidencia in re.finditer(r'\b' + re.escape(palabra) + r'\b', texto_min):
+        for coincidencia in re.finditer(r"\b" + re.escape(palabra) + r"\b", texto_min):
             inicio, fin = coincidencia.span()
-            if any(inicio < ocupado_fin and fin > ocupado_inicio
-                   for ocupado_inicio, ocupado_fin in spans_ocupados):
+            if any(
+                inicio < ocupado_fin and fin > ocupado_inicio
+                for ocupado_inicio, ocupado_fin in spans_ocupados
+            ):
                 continue
             spans_ocupados.append((inicio, fin))
             puntaje += PESOS[nivel]
             indicadores.append(f"[{nivel.upper()}] {palabra}")
-    
+
     if puntaje >= 2.0:
         nivel = "CRÍTICO"
     elif puntaje >= 1.0:
@@ -59,18 +89,22 @@ def evaluar_texto(texto: str) -> dict:
         nivel = "BAJO"
     else:
         nivel = "SIN RIESGO"
-    
+
     return {
         "puntaje": round(puntaje, 2),
         "nivel_riesgo": nivel,
-        "indicadores": indicadores
+        "indicadores": indicadores,
     }
+
 
 def identificar_perfil(analisis: dict) -> str:
     puntaje = analisis["puntaje"]
     indicadores = analisis["indicadores"]
-    
-    if puntaje >= 1.0 and any("dime tu edad" in i.lower() or "foto" in i.lower() or "secreto" in i.lower() for i in indicadores):
+
+    if puntaje >= 1.0 and any(
+        "dime tu edad" in i.lower() or "foto" in i.lower() or "secreto" in i.lower()
+        for i in indicadores
+    ):
         return "PROBABLE AGRESOR (adulto/perfil de riesgo)"
     elif puntaje == 0:
         return "SIN INDICADORES DE RIESGO"
