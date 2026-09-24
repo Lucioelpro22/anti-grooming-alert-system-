@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.cors import CORSMiddleware
 
 from api import detect_patterns, ip_analysis, report_generator
 from api.auth import (
@@ -15,12 +16,23 @@ from api.auth import (
     get_current_user,
     require_roles,
 )
+from api.security import ApiShieldMiddleware, env_list
 
 app = FastAPI(
     title="Sistema de Alerta Temprana — Anti-Grooming",
     description="API de detección y documentación de conductas de grooming",
-    version="3.1.0",
+    version="3.2.0",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=env_list("ALLOWED_ORIGINS_JSON", []),
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    max_age=600,
+)
+app.add_middleware(ApiShieldMiddleware)
 
 
 class Mensaje(BaseModel):
@@ -124,4 +136,4 @@ async def obtener_informe(
 
 @app.get("/estado")
 async def estado():
-    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.1.0"}
+    return {"estado": "activo", "sistema": "anti-grooming", "version": "3.2.0"}

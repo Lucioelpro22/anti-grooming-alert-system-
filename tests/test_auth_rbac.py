@@ -11,6 +11,7 @@ from pwdlib import PasswordHash
 from api import report_generator
 from api.auth import LOGIN_LIMITER
 from api.auth import JWT_AUDIENCE, JWT_ISSUER
+from api.security import API_LIMITER
 
 
 PASSWORD = "correct-horse-battery-staple"  # pragma: allowlist secret
@@ -46,12 +47,19 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("AUTH_USERS_JSON", json.dumps(users))
     monkeypatch.setenv("EVIDENCE_ENCRYPTION_KEY", EVIDENCE_KEY)
     monkeypatch.setenv("AUDIT_HMAC_KEY", AUDIT_KEY)
+    monkeypatch.setenv("ALLOWED_ORIGINS_JSON", '["https://app.example.org"]')
+    monkeypatch.setenv("ALLOWED_HOSTS_JSON", '["testserver"]')
+    monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "65536")
+    monkeypatch.setenv("API_RATE_LIMIT", "1000")
+    monkeypatch.setenv("API_RATE_WINDOW_SECONDS", "60")
     monkeypatch.setattr(report_generator, "CARPETA_INFORMES", tmp_path)
     LOGIN_LIMITER._failures.clear()
+    API_LIMITER.clear()
     from api.main import app
 
     with TestClient(app) as test_client:
         yield test_client
+    API_LIMITER.clear()
 
 
 def token(client, username, password=PASSWORD):
@@ -174,7 +182,10 @@ def test_login_rate_limit(client):
     for _ in range(5):
         response = client.post(
             "/token",
-            data={"username": "blocked", "password": "wrong"},  # pragma: allowlist secret
+            data={
+                "username": "blocked",
+                "password": "wrong",  # pragma: allowlist secret
+            },
         )
         assert response.status_code == 401
     response = client.post(
@@ -266,3 +277,70 @@ def test_missing_evidence_key_fails_closed(client, monkeypatch):
         headers=headers(client, "analyst-a"),
     )
     assert response.status_code == 503
+
+
+def test_security_headers_are_added(client):
+    response = client.get("/estado")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["content-security-policy"] == (
+        "default-src 'none'; frame-ancestors 'none'"
+    )
+    assert response.headers["strict-transport-security"].startswith("max-age=")
+    assert len(response.headers["x-request-id"]) == 32
+
+
+def test_valid_request_id_is_preserved(client):
+    request_id = "request-12345678"
+    response = client.get("/estado", headers={"X-Request-ID": request_id})
+    assert response.headers["x-request-id"] == request_id
+
+
+def test_untrusted_host_is_rejected(client):
+    response = client.get("/estado", headers={"Host": "attacker.example"})
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Host no permitido"
+
+
+def test_oversized_request_is_rejected_before_validation(client):
+    response = client.post(
+        "/analizar-mensaje",
+        content=b"x" * 65_537,
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+
+
+def test_cors_allows_only_configured_origin(client):
+    allowed = client.options(
+        "/analizar-mensaje",
+        headers={
+            "Origin": "https://app.example.org",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert allowed.status_code == 200
+    assert allowed.headers["access-control-allow-origin"] == "https://app.example.org"
+
+    denied = client.options(
+        "/analizar-mensaje",
+        headers={
+            "Origin": "https://attacker.example",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert denied.status_code == 400
+    assert "access-control-allow-origin" not in denied.headers
+
+
+def test_global_rate_limit_returns_retry_after(client, monkeypatch):
+    monkeypatch.setenv("API_RATE_LIMIT", "2")
+    API_LIMITER.clear()
+    assert client.get("/estado").status_code == 200
+    assert client.get("/estado").status_code == 200
+    blocked = client.get("/estado")
+    assert blocked.status_code == 429
+    assert int(blocked.headers["retry-after"]) >= 1
