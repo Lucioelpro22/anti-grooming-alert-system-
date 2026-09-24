@@ -57,12 +57,12 @@ def load_users() -> dict[str, StoredUser]:
     try:
         records = json.loads(raw)
         if not isinstance(records, list):
-            raise ValueError
+            raise TypeError
         users: dict[str, StoredUser] = {}
         for record in records:
             username = str(record["username"]).strip().lower()
             if not username or username in users:
-                raise ValueError
+                raise TypeError
             users[username] = StoredUser(
                 username=username,
                 password_hash=str(record["password_hash"]),
