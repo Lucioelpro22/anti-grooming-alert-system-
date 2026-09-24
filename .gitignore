@@ -6,3 +6,6 @@ __pycache__/
 .coverage
 htmlcov/
 informes_generados/
+.env
+.env.*
+!.env.example

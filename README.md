@@ -33,3 +33,19 @@ Software de ciberseguridad diseñado para detectar, identificar y documentar con
 
 🔗 Autor: @Lucioelpro22
 📅 Versión: 1.0.0
+
+## Seguridad V3
+
+La API usa OAuth2 con tokens JWT de corta duración, contraseñas Argon2 y roles
+`admin`, `analyst` y `auditor`. Los informes quedan vinculados a su creador; solo
+su propietario, un administrador o un auditor pueden consultarlos.
+
+Antes de iniciar la API:
+
+1. Copiá `.env.example` a un archivo local `.env` que nunca debe subirse.
+2. Generá `JWT_SECRET` con `openssl rand -hex 32`.
+3. Generá hashes con `python scripts/hash_password.py`.
+4. Definí los usuarios en `AUTH_USERS_JSON` usando únicamente hashes Argon2.
+
+No hay credenciales predeterminadas y el servicio falla de forma segura si la
+configuración de autenticación está ausente o es inválida.
