@@ -25,12 +25,29 @@ def evaluar_texto(texto: str) -> dict:
     texto_min = texto.lower()
     puntaje = 0.0
     indicadores = []
-    
-    for nivel, palabras in PALABRAS_RIESGO.items():
-        for palabra in palabras:
-            if re.search(r'\b' + re.escape(palabra) + r'\b', texto_min):
-                puntaje += PESOS[nivel]
-                indicadores.append(f"[{nivel.upper()}] {palabra}")
+
+    # Prefer longer phrases and consume their spans. This prevents nested
+    # indicators (for example, "hola guapa" and "guapa") from inflating the
+    # risk score for the same words.
+    candidatos = sorted(
+        (
+            (palabra, nivel)
+            for nivel, palabras in PALABRAS_RIESGO.items()
+            for palabra in palabras
+        ),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+    spans_ocupados: list[tuple[int, int]] = []
+    for palabra, nivel in candidatos:
+        for coincidencia in re.finditer(r'\b' + re.escape(palabra) + r'\b', texto_min):
+            inicio, fin = coincidencia.span()
+            if any(inicio < ocupado_fin and fin > ocupado_inicio
+                   for ocupado_inicio, ocupado_fin in spans_ocupados):
+                continue
+            spans_ocupados.append((inicio, fin))
+            puntaje += PESOS[nivel]
+            indicadores.append(f"[{nivel.upper()}] {palabra}")
     
     if puntaje >= 2.0:
         nivel = "CRÍTICO"
