@@ -1,10 +1,10 @@
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import MappingProxyType
-from collections.abc import Mapping
 
 
 class JurisdictionNotConfiguredError(ValueError):
