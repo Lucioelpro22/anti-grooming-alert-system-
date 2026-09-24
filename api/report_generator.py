@@ -1,12 +1,13 @@
 import uuid
 import re
+import json
 from datetime import datetime
 from pathlib import Path
 
 CARPETA_INFORMES = Path("informes_generados")
 CARPETA_INFORMES.mkdir(exist_ok=True)
 
-def crear_informe(mensaje, analisis, ip_info, perfil) -> str:
+def crear_informe(mensaje, analisis, ip_info, perfil, owner: str) -> str:
     informe_id = str(uuid.uuid4())[:8]
     fecha_emision = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     
@@ -70,12 +71,26 @@ NO SUSTITUYE DENUNCIA FORMAL ANTE AUTORIDADES
     
     archivo = CARPETA_INFORMES / f"informe_{informe_id}.txt"
     archivo.write_text(contenido, encoding="utf-8")
+    metadata = CARPETA_INFORMES / f"informe_{informe_id}.json"
+    metadata.write_text(
+        json.dumps({"id": informe_id, "owner": owner}, ensure_ascii=False),
+        encoding="utf-8",
+    )
     return informe_id
 
-def leer_informe(informe_id: str) -> dict:
+def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) -> dict:
     if not re.fullmatch(r"[0-9a-f]{8}", informe_id):
         return {}
     archivo = CARPETA_INFORMES / f"informe_{informe_id}.txt"
-    if not archivo.is_file():
+    metadata = CARPETA_INFORMES / f"informe_{informe_id}.json"
+    if not archivo.is_file() or not metadata.is_file():
+        return {}
+    try:
+        datos = json.loads(metadata.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if datos.get("id") != informe_id:
+        return {}
+    if not can_read_all and datos.get("owner") != requester:
         return {}
     return {"id": informe_id, "contenido": archivo.read_text(encoding="utf-8")}

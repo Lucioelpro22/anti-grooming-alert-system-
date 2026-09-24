@@ -40,4 +40,4 @@ def test_report_reader_rejects_path_and_glob_injection(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     Path("informes_generados").mkdir()
     Path("informes_generados/informe_safe.txt").write_text("secret", encoding="utf-8")
-    assert leer_informe("../*") == {}
+    assert leer_informe("../*", requester="analyst") == {}
