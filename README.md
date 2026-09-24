@@ -64,5 +64,9 @@ Cada push a `main` o a una rama de seguridad, y cada Pull Request hacia `main`,
 ejecuta automáticamente las pruebas, formato, lint, tipos, Bandit, pip-audit,
 detect-secrets y revisión de dependencias mediante GitHub Actions.
 
+Los tokens JWT pueden revocarse inmediatamente con `POST /logout`. La lista de
+revocación está limitada y expira automáticamente junto con los tokens para
+evitar crecimiento indefinido en memoria; un token revocado no puede reutilizarse.
+
 No hay credenciales predeterminadas y el servicio falla de forma segura si la
 configuración de autenticación está ausente o es inválida.

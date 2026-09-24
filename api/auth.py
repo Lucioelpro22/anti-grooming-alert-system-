@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated
@@ -25,6 +25,7 @@ class Role(str, Enum):
 class User:
     username: str
     role: Role
+    token_id: str | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,42 @@ JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "anti-grooming-alert-system"
 JWT_AUDIENCE = "anti-grooming-api"
 ACCESS_TOKEN_MINUTES = 15
+MAX_REVOKED_TOKENS = 10_000
+
+
+class TokenRevocationStore:
+    def __init__(self) -> None:
+        self._tokens: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def revoke(self, token_id: str, expires_at: float) -> None:
+        now = time.time()
+        with self._lock:
+            self._tokens = {
+                jti: expiry for jti, expiry in self._tokens.items() if expiry > now
+            }
+            if len(self._tokens) >= MAX_REVOKED_TOKENS:
+                oldest = min(self._tokens, key=lambda jti: self._tokens[jti])
+                del self._tokens[oldest]
+            self._tokens[token_id] = expires_at
+
+    def is_revoked(self, token_id: str) -> bool:
+        now = time.time()
+        with self._lock:
+            expiry = self._tokens.get(token_id)
+            if expiry is None:
+                return False
+            if expiry <= now:
+                del self._tokens[token_id]
+                return False
+            return True
+
+    def clear(self) -> None:
+        with self._lock:
+            self._tokens.clear()
+
+
+TOKEN_REVOCATIONS = TokenRevocationStore()
 
 
 def _jwt_secret() -> str:
@@ -120,8 +157,16 @@ def decode_access_token(token: str) -> User:
             options={"require": ["sub", "role", "iat", "nbf", "exp", "jti"]},
         )
         username = payload.get("sub")
+        token_id = payload.get("jti")
         role = Role(payload.get("role"))
-        if not isinstance(username, str) or not username:
+        if (
+            not isinstance(username, str)
+            or not username
+            or not isinstance(token_id, str)
+            or not token_id
+        ):
+            raise InvalidTokenError
+        if TOKEN_REVOCATIONS.is_revoked(token_id):
             raise InvalidTokenError
     except (InvalidTokenError, ValueError) as exc:
         raise credentials_error from exc
@@ -129,7 +174,22 @@ def decode_access_token(token: str) -> User:
     stored = load_users().get(username)
     if stored is None or stored.disabled or stored.role != role:
         raise credentials_error
-    return User(username=stored.username, role=stored.role)
+    return User(username=stored.username, role=stored.role, token_id=token_id)
+
+
+def revoke_access_token(user: User, expires_at: float | None = None) -> None:
+    if user.token_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    TOKEN_REVOCATIONS.revoke(
+        user.token_id,
+        expires_at
+        if expires_at is not None
+        else time.time() + ACCESS_TOKEN_MINUTES * 60,
+    )
 
 
 def get_current_user(token: Annotated[str, Depends(OAUTH2_SCHEME)]) -> User:
