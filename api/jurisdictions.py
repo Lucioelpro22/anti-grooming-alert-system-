@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
+from collections.abc import Mapping
 
 
 class JurisdictionNotConfiguredError(ValueError):
@@ -31,13 +31,13 @@ def _load_policies() -> Mapping[str, JurisdictionPolicy]:
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("Configuración de jurisdicciones inválida") from exc
     if not isinstance(raw, dict):
-        raise RuntimeError("Configuración de jurisdicciones inválida")
+        raise TypeError("Configuración de jurisdicciones inválida")
     policies: dict[str, JurisdictionPolicy] = {}
     for code, item in raw.items():
         if not isinstance(code, str) or not _CODE_PATTERN.fullmatch(code):
             raise RuntimeError("Código de jurisdicción inválido")
         if not isinstance(item, dict):
-            raise RuntimeError("Política de jurisdicción inválida")
+            raise TypeError("Política de jurisdicción inválida")
         try:
             languages = tuple(item["languages"])
             channels = tuple(item["reporting_channels"])
@@ -62,7 +62,7 @@ def _load_policies() -> Mapping[str, JurisdictionPolicy]:
             )
             or policy.recommended_retention_days <= 0
         ):
-            raise RuntimeError("Política de jurisdicción inválida")
+            raise TypeError("Política de jurisdicción inválida")
         policies[code] = policy
     return MappingProxyType(policies)
 
