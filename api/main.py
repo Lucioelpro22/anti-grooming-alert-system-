@@ -140,7 +140,6 @@ async def obtener_jurisdiccion(
     country_code: str,
     user: Annotated[User, Depends(get_current_user)],
 ):
-    del user
     try:
         policy = get_policy(country_code)
     except JurisdictionNotConfiguredError as exc:
