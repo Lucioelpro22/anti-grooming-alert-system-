@@ -106,7 +106,7 @@ def identificar_perfil(analisis: dict) -> str:
         for i in indicadores
     ):
         return "PROBABLE AGRESOR (adulto/perfil de riesgo)"
-    elif puntaje == 0:
+    elif puntaje <= 0:
         return "SIN INDICADORES DE RIESGO"
     else:
         return "REQUIERE SEGUIMIENTO"
