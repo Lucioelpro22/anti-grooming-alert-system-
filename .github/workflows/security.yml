@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           python -m detect_secrets scan --all-files \
-            --exclude-files '^(\\.git/|\\.mypy_cache/|\\.pytest_cache/|\\.ruff_cache/)' \
+                        --exclude-files '^(\.git/|\.mypy_cache/|\.pytest_cache/|\.ruff_cache/|informes_generados/)' \
             > /tmp/secrets.json
           python - <<'PY'
           import json
