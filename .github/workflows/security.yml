@@ -33,7 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r api/requirements.txt
-          python -m pip install bandit detect-secrets mypy pip-audit pytest ruff
+          python -m pip install bandit detect-secrets httpx2 mypy pip-audit pytest ruff
 
       - name: Check formatting and lint
         run: |
