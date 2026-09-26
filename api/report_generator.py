@@ -56,6 +56,8 @@ def _atomic_write(path: Path, data: bytes) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, path)
         temporary = None
+    except OSError as exc:
+        raise EvidenceSecurityError(f"Fallo al escribir evidencia: {exc}") from exc
     finally:
         if temporary is not None:
             Path(temporary).unlink(missing_ok=True)
@@ -127,11 +129,12 @@ def _append_audit(action: str, report_id: str, actor: str) -> None:
 def _render_report(
     mensaje: Any, analisis: dict, ip_info: dict, perfil: str, report_id: str
 ) -> str:
+    """Render report text. Original message content is stored separately in ciphertext."""
     fecha_emision = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S UTC")
     contenido = f"""
 ======================================================================
                     INFORME TÉCNICO DE DETECCIÓN
-                SISTEMA DE ALERTA TEMPRANA — ANTI-GROOMING
+            SISTEMA DE ALERTA TEMPRANA — ANTI-GROOMING
 ======================================================================
 ID INFORME: {report_id}
 FECHA EMISIÓN: {fecha_emision}
@@ -192,7 +195,12 @@ NO SUSTITUYE DENUNCIA FORMAL ANTE AUTORIDADES
 def crear_informe(
     mensaje: Any, analisis: dict, ip_info: dict, perfil: str, owner: str
 ) -> str:
-    _decode_key("AUDIT_HMAC_KEY")
+    """Create and encrypt report with original message content preserved."""
+    try:
+        _decode_key("AUDIT_HMAC_KEY")
+    except EvidenceSecurityError as exc:
+        raise EvidenceSecurityError("Claves de auditoría no configuradas") from exc
+    
     report_id = uuid.uuid4().hex
     created_at = datetime.now(timezone.utc).isoformat()
     authenticated_metadata: dict[str, Any] = {
@@ -202,12 +210,25 @@ def crear_informe(
         "created_at": created_at,
         "cipher": "AES-256-GCM",
     }
+    
+    # Preserve original message content and normalized analysis result
+    evidence_bundle: dict[str, Any] = {
+        "original_message_content": mensaje.contenido,
+        "report_text": _render_report(mensaje, analisis, ip_info, perfil, report_id),
+        "analysis_result": analisis,
+        "detector_version": 1,
+    }
+    
     nonce = os.urandom(12)
-    ciphertext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).encrypt(
-        nonce,
-        _render_report(mensaje, analisis, ip_info, perfil, report_id).encode("utf-8"),
-        _canonical(authenticated_metadata),
-    )
+    try:
+        ciphertext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).encrypt(
+            nonce,
+            json.dumps(evidence_bundle, ensure_ascii=False).encode("utf-8"),
+            _canonical(authenticated_metadata),
+        )
+    except EvidenceSecurityError as exc:
+        raise EvidenceSecurityError("Claves de cifrado no configuradas") from exc
+    
     metadata = authenticated_metadata | {
         "nonce": base64.urlsafe_b64encode(nonce).decode("ascii"),
         "ciphertext_sha256": hashlib.sha256(ciphertext).hexdigest(),
@@ -224,6 +245,7 @@ def crear_informe(
 
 
 def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) -> dict:
+    """Read and decrypt report, returning original message and analysis."""
     if not re.fullmatch(r"[0-9a-f]{32}", informe_id):
         return {}
     encrypted_path = CARPETA_INFORMES / f"informe_{informe_id}.enc"
@@ -256,11 +278,16 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
             plaintext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).decrypt(
                 nonce, ciphertext, _canonical(authenticated_metadata)
             )
-            content = plaintext.decode("utf-8")
+            evidence_bundle = json.loads(plaintext.decode("utf-8"))
         except (InvalidTag, ValueError, KeyError, UnicodeDecodeError):
             return {}
         if not can_read_all and metadata.get("owner") != requester:
             _append_audit("report_access_denied", informe_id, requester)
             return {}
         _append_audit("report_read", informe_id, requester)
-        return {"id": informe_id, "contenido": content}
+        return {
+            "id": informe_id,
+            "original_message_content": evidence_bundle.get("original_message_content"),
+            "report_text": evidence_bundle.get("report_text"),
+            "analysis_result": evidence_bundle.get("analysis_result"),
+        }

@@ -15,9 +15,15 @@ from api.auth import (
     create_access_token,
     get_current_user,
     require_roles,
+    validate_encryption_keys,
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
 from api.security import ApiShieldMiddleware, REPORT_LIMITER, env_list
+
+try:
+    validate_encryption_keys()
+except RuntimeError as e:
+    raise RuntimeError(f"FATAL: {e}") from e
 
 app = FastAPI(
     title="Sistema de Alerta Temprana — Anti-Grooming",
@@ -46,11 +52,18 @@ class Mensaje(BaseModel):
     ip_origen: str | None = Field(default=None, max_length=45)
     plataforma: str | None = Field(default=None, max_length=100)
 
-    @field_validator("remitente_id", "destinatario_id", "contenido")
+    @field_validator("remitente_id", "destinatario_id", "contenido", "plataforma")
     @classmethod
-    def reject_blank_text(cls, value: str) -> str:
-        if not value.strip():
+    def reject_blank_text(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError("El campo no puede estar vacío")
+        return value
+
+    @field_validator("remitente_id", "destinatario_id", "plataforma")
+    @classmethod
+    def limit_to_single_line(cls, value: str | None) -> str | None:
+        if value is not None and "\n" in value:
+            raise ValueError("El campo no puede contener saltos de línea")
         return value
 
 
@@ -112,7 +125,6 @@ async def analizar_mensaje(
             mensaje, resultado_patrones, datos_ip, perfil, owner=user.username
         )
     except report_generator.EvidenceSecurityError as exc:
-        report_generator.registrar_fallo("report_creation_failed", user.username)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Almacenamiento seguro no disponible",
