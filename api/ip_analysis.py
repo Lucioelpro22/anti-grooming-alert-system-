@@ -3,14 +3,15 @@ from datetime import datetime, timezone
 
 
 def analizar_ip(ip_str: str) -> dict:
+    normalized = ip_str.strip()
     try:
-        ip = ipaddress.ip_address(ip_str)
+        ip = ipaddress.ip_address(normalized)
         es_privada = ip.is_private
         es_reservada = ip.is_reserved
         version = ip.version
 
         return {
-            "ip": ip_str,
+            "ip": normalized,
             "valida": True,
             "version": f"IPv{version}",
             "ambito": "Red local/privada" if es_privada else "Internet pública",

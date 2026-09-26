@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.middleware.cors import CORSMiddleware
 
 from api import detect_patterns, ip_analysis, report_generator
@@ -17,7 +17,7 @@ from api.auth import (
     require_roles,
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
-from api.security import ApiShieldMiddleware, env_list
+from api.security import ApiShieldMiddleware, REPORT_LIMITER, env_list
 
 app = FastAPI(
     title="Sistema de Alerta Temprana — Anti-Grooming",
@@ -45,6 +45,13 @@ class Mensaje(BaseModel):
     fecha_hora: str | None = Field(default=None, max_length=64)
     ip_origen: str | None = Field(default=None, max_length=45)
     plataforma: str | None = Field(default=None, max_length=100)
+
+    @field_validator("remitente_id", "destinatario_id", "contenido")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("El campo no puede estar vacío")
+        return value
 
 
 class AnalisisRespuesta(BaseModel):
@@ -82,24 +89,30 @@ async def login(
 
 @app.post("/analizar-mensaje", response_model=AnalisisRespuesta)
 async def analizar_mensaje(
+    request: Request,
     mensaje: Mensaje,
     user: Annotated[User, Depends(require_roles(Role.ADMIN, Role.ANALYST))],
 ):
+    rate = REPORT_LIMITER.check(user.username)
+    if not rate.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados análisis; probá más tarde",
+            headers={"Retry-After": str(rate.retry_after)},
+        )
+
     if not mensaje.fecha_hora:
         mensaje.fecha_hora = datetime.now(timezone.utc).isoformat()
 
     resultado_patrones = detect_patterns.evaluar_texto(mensaje.contenido)
-
-    datos_ip = {}
-    if mensaje.ip_origen:
-        datos_ip = ip_analysis.analizar_ip(mensaje.ip_origen)
-
+    datos_ip = ip_analysis.analizar_ip(mensaje.ip_origen.strip()) if mensaje.ip_origen else {}
     perfil = detect_patterns.identificar_perfil(resultado_patrones)
     try:
         informe_id = report_generator.crear_informe(
             mensaje, resultado_patrones, datos_ip, perfil, owner=user.username
         )
     except report_generator.EvidenceSecurityError as exc:
+        report_generator.registrar_fallo("report_creation_failed", user.username)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Almacenamiento seguro no disponible",
@@ -135,12 +148,8 @@ async def obtener_informe(
     return informe
 
 
-@app.get("/jurisdiccion/{country_code}")
-async def obtener_jurisdiccion(
-    country_code: str,
-    user: Annotated[User, Depends(get_current_user)],
-):
-    del user
+@app.get("/jurisdiccion/{country_code}", dependencies=[Depends(get_current_user)])
+async def obtener_jurisdiccion(country_code: str):
     try:
         policy = get_policy(country_code)
     except JurisdictionNotConfiguredError as exc:
