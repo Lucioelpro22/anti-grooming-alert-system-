@@ -71,6 +71,7 @@ class SlidingWindowRateLimiter:
 
 
 API_LIMITER = SlidingWindowRateLimiter()
+REPORT_LIMITER = SlidingWindowRateLimiter(attempts=10, window_seconds=60)
 
 
 class ApiShieldMiddleware:
