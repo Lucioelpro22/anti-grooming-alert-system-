@@ -10,7 +10,7 @@ from pwdlib import PasswordHash
 
 from api import report_generator
 from api.auth import JWT_AUDIENCE, JWT_ISSUER, LOGIN_LIMITER
-from api.security import API_LIMITER
+from api.security import API_LIMITER, REPORT_LIMITER
 
 PASSWORD = "correct-horse-battery-staple"  # pragma: allowlist secret
 EVIDENCE_KEY = base64.urlsafe_b64encode(b"e" * 32).decode("ascii")
@@ -51,6 +51,11 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("API_RATE_LIMIT", "1000")
     monkeypatch.setenv("API_RATE_WINDOW_SECONDS", "60")
     monkeypatch.setattr(report_generator, "CARPETA_INFORMES", tmp_path)
+    monkeypatch.setenv(
+        "AUDIT_STATE_DB",
+        str(tmp_path.parent / (tmp_path.name + "-state") / "audit.sqlite"),
+    )
+    REPORT_LIMITER.clear()
     LOGIN_LIMITER._failures.clear()
     API_LIMITER.clear()
     from api.main import app

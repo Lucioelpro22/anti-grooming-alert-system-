@@ -9,10 +9,14 @@ from enum import Enum
 from typing import Annotated
 
 import jwt
+from argon2 import extract_parameters
+from argon2.exceptions import InvalidHashError
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+
+from api.report_generator import _decode_key
 
 
 class Role(str, Enum):
@@ -41,6 +45,23 @@ JWT_ISSUER = "anti-grooming-alert-system"
 JWT_AUDIENCE = "anti-grooming-api"
 ACCESS_TOKEN_MINUTES = 15
 
+# Known example/placeholder values that must never be used in production
+BLACKLISTED_SECRETS = {
+    "replace-with-at-least-32-random-characters",
+    "insecure_example_do_not_use_in_production_generate_new_secret_with_openssl",
+}
+
+BLACKLISTED_PASSWORD_HASHES = {
+    "$argon2id$REPLACE_ME",
+    "$argon2id$v=19$m=65540,t=3,p=4$REPLACE_WITH_ACTUAL_HASH$REPLACE_WITH_ACTUAL_HASH",
+}
+
+BLACKLISTED_KEYS = {
+    "insecure_example_replace_with_generated_base64_key_32_bytes",
+    "replace-with-generated-base64-key",
+    "replace-with-a-different-generated-base64-key",
+}
+
 
 def _jwt_secret() -> str:
     secret = os.getenv("JWT_SECRET", "")
@@ -48,6 +69,12 @@ def _jwt_secret() -> str:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Autenticación no configurada",
+        )
+    # Reject known example/placeholder values
+    if secret.lower() in BLACKLISTED_SECRETS:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="JWT_SECRET usa valor de ejemplo — reemplazar con secreto seguro generado",
         )
     return secret
 
@@ -63,18 +90,46 @@ def load_users() -> dict[str, StoredUser]:
             username = str(record["username"]).strip().lower()
             if not username or username in users:
                 raise TypeError
+            password_hash = str(record["password_hash"])
+            # Reject known example/placeholder password hashes
+            if password_hash in BLACKLISTED_PASSWORD_HASHES:
+                raise TypeError(
+                    f"Usuario {username} usa hash de ejemplo — generar nuevo hash"
+                )
+            extract_parameters(password_hash)
             users[username] = StoredUser(
                 username=username,
-                password_hash=str(record["password_hash"]),
+                password_hash=password_hash,
                 role=Role(record["role"]),
                 disabled=bool(record.get("disabled", False)),
             )
         return users
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        InvalidHashError,
+        json.JSONDecodeError,
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Configuración de usuarios inválida",
         ) from exc
+
+
+def validate_encryption_keys() -> None:
+    evidence_key = _decode_key("EVIDENCE_ENCRYPTION_KEY")
+    audit_key = _decode_key("AUDIT_HMAC_KEY")
+    if evidence_key == audit_key:
+        raise RuntimeError("Las claves de cifrado y auditoría deben ser distintas")
+
+
+def validate_configuration() -> None:
+    _jwt_secret()
+    users = load_users()
+    if not users or not any(not user.disabled for user in users.values()):
+        raise RuntimeError("Debe configurar al menos un usuario activo")
+    validate_encryption_keys()
 
 
 def authenticate_user(username: str, password: str) -> StoredUser | None:

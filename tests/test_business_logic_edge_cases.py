@@ -9,7 +9,9 @@ from api.report_generator import leer_informe
 
 
 def test_critical_multi_indicator_message():
-    assert evaluar_texto("dime tu edad no le cuentes a nadie")["nivel_riesgo"] == "CRÍTICO"
+    assert (
+        evaluar_texto("dime tu edad no le cuentes a nadie")["nivel_riesgo"] == "CRÍTICO"
+    )
 
 
 def test_critical_photo_request():
@@ -32,7 +34,7 @@ def test_nested_phrase_is_not_double_counted():
 
 def test_isolated_photo_word_is_not_enough_context():
     result = evaluar_texto("foto")
-    assert result["nivel_riesgo"] == "SIN RIESGO"
+    assert result["nivel_riesgo"] == "SIN INDICADORES DETECTADOS"
     assert result["indicadores"] == []
 
 
@@ -58,11 +60,13 @@ def test_report_reader_rejects_path_and_glob_injection(tmp_path, monkeypatch):
 
 def test_empty_text_is_treated_as_safe():
     result = evaluar_texto("   ")
-    assert result["nivel_riesgo"] == "SIN RIESGO"
+    assert result["nivel_riesgo"] == "SIN INDICADORES DETECTADOS"
     assert result["indicadores"] == []
 
 
-@pytest.mark.parametrize("country_code, expected", [(" ar ", "AR"), ("us", "US"), ("br", "BR")])
+@pytest.mark.parametrize(
+    "country_code, expected", [(" ar ", "AR"), ("us", "US"), ("br", "BR")]
+)
 def test_supported_jurisdiction_is_normalized(country_code, expected):
     assert get_policy(country_code).code == expected
 
