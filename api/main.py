@@ -1,3 +1,5 @@
+import unicodedata
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -15,17 +17,21 @@ from api.auth import (
     create_access_token,
     get_current_user,
     require_roles,
-    validate_encryption_keys,
+    validate_configuration,
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
-from api.security import ApiShieldMiddleware, REPORT_LIMITER, env_list
+from api.security import REPORT_LIMITER, ApiShieldMiddleware, env_list
 
-try:
-    validate_encryption_keys()
-except RuntimeError as e:
-    raise RuntimeError(f"FATAL: {e}") from e
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    validate_configuration()
+    report_generator.verificar_auditoria()
+    yield
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="Sistema de Alerta Temprana — Anti-Grooming",
     description="API de detección y documentación de conductas de grooming",
     version="3.5.0",
@@ -43,7 +49,7 @@ app.add_middleware(ApiShieldMiddleware)
 
 
 class Mensaje(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid")
 
     remitente_id: str = Field(min_length=1, max_length=128)
     destinatario_id: str = Field(min_length=1, max_length=128)
@@ -59,10 +65,14 @@ class Mensaje(BaseModel):
             raise ValueError("El campo no puede estar vacío")
         return value
 
-    @field_validator("remitente_id", "destinatario_id", "plataforma")
+    @field_validator(
+        "remitente_id", "destinatario_id", "plataforma", "fecha_hora", "ip_origen"
+    )
     @classmethod
     def limit_to_single_line(cls, value: str | None) -> str | None:
-        if value is not None and "\n" in value:
+        if value is not None and any(
+            unicodedata.category(c) in {"Cc", "Cf", "Zl", "Zp"} for c in value
+        ):
             raise ValueError("El campo no puede contener saltos de línea")
         return value
 
@@ -82,7 +92,7 @@ class TokenResponse(BaseModel):
 
 
 @app.post("/token", response_model=TokenResponse)
-async def login(
+def login(
     request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
 ):
@@ -101,7 +111,7 @@ async def login(
 
 
 @app.post("/analizar-mensaje", response_model=AnalisisRespuesta)
-async def analizar_mensaje(
+def analizar_mensaje(
     request: Request,
     mensaje: Mensaje,
     user: Annotated[User, Depends(require_roles(Role.ADMIN, Role.ANALYST))],
@@ -118,7 +128,9 @@ async def analizar_mensaje(
         mensaje.fecha_hora = datetime.now(timezone.utc).isoformat()
 
     resultado_patrones = detect_patterns.evaluar_texto(mensaje.contenido)
-    datos_ip = ip_analysis.analizar_ip(mensaje.ip_origen.strip()) if mensaje.ip_origen else {}
+    datos_ip = (
+        ip_analysis.analizar_ip(mensaje.ip_origen.strip()) if mensaje.ip_origen else {}
+    )
     perfil = detect_patterns.identificar_perfil(resultado_patrones)
     try:
         informe_id = report_generator.crear_informe(
@@ -140,7 +152,7 @@ async def analizar_mensaje(
 
 
 @app.get("/informe/{informe_id}")
-async def obtener_informe(
+def obtener_informe(
     informe_id: str,
     user: Annotated[User, Depends(get_current_user)],
 ):

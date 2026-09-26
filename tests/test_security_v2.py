@@ -30,7 +30,7 @@ def test_nested_phrase_is_not_double_counted():
 
 
 def test_neutral_message():
-    assert evaluar_texto("buen día")["nivel_riesgo"] == "SIN RIESGO"
+    assert evaluar_texto("buen día")["nivel_riesgo"] == "SIN INDICADORES DETECTADOS"
 
 
 def test_ip_validation():

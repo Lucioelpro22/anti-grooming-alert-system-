@@ -9,10 +9,14 @@ from enum import Enum
 from typing import Annotated
 
 import jwt
+from argon2 import extract_parameters
+from argon2.exceptions import InvalidHashError
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+
+from api.report_generator import _decode_key
 
 
 class Role(str, Enum):
@@ -89,7 +93,10 @@ def load_users() -> dict[str, StoredUser]:
             password_hash = str(record["password_hash"])
             # Reject known example/placeholder password hashes
             if password_hash in BLACKLISTED_PASSWORD_HASHES:
-                raise TypeError(f"Usuario {username} usa hash de ejemplo — generar nuevo hash")
+                raise TypeError(
+                    f"Usuario {username} usa hash de ejemplo — generar nuevo hash"
+                )
+            extract_parameters(password_hash)
             users[username] = StoredUser(
                 username=username,
                 password_hash=password_hash,
@@ -97,7 +104,13 @@ def load_users() -> dict[str, StoredUser]:
                 disabled=bool(record.get("disabled", False)),
             )
         return users
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        InvalidHashError,
+        json.JSONDecodeError,
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Configuración de usuarios inválida",
@@ -105,15 +118,18 @@ def load_users() -> dict[str, StoredUser]:
 
 
 def validate_encryption_keys() -> None:
-    """Validate encryption keys at startup to prevent using example values."""
-    evidence_key = os.getenv("EVIDENCE_ENCRYPTION_KEY", "").lower()
-    audit_key = os.getenv("AUDIT_HMAC_KEY", "").lower()
-    
-    for key_value in [evidence_key, audit_key]:
-        if key_value in BLACKLISTED_KEYS:
-            raise RuntimeError(
-                "Claves de cifrado usan valores de ejemplo — generar nuevas claves con scripts/generate_security_keys.py"
-            )
+    evidence_key = _decode_key("EVIDENCE_ENCRYPTION_KEY")
+    audit_key = _decode_key("AUDIT_HMAC_KEY")
+    if evidence_key == audit_key:
+        raise RuntimeError("Las claves de cifrado y auditoría deben ser distintas")
+
+
+def validate_configuration() -> None:
+    _jwt_secret()
+    users = load_users()
+    if not users or not any(not user.disabled for user in users.values()):
+        raise RuntimeError("Debe configurar al menos un usuario activo")
+    validate_encryption_keys()
 
 
 def authenticate_user(username: str, password: str) -> StoredUser | None:

@@ -8,9 +8,7 @@ def _normalize_text(texto: str) -> str:
     # Decompose accented characters (estás → estas)
     normalized = unicodedata.normalize("NFKD", texto)
     # Keep only ASCII-like characters (remove diacritics)
-    normalized = "".join(
-        c for c in normalized if unicodedata.category(c) != "Mn"
-    )
+    normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
     # Convert to lowercase
     normalized = normalized.lower()
     # Collapse multiple spaces into one
@@ -75,26 +73,33 @@ class RiskAnalysis(TypedDict):
 
 def evaluar_texto(texto: str) -> RiskAnalysis:
     """Evaluate text for grooming risk indicators with Unicode normalization."""
-    # Store original for reporting
-    texto_original = texto
     # Normalize for analysis
     texto_normalizado = _normalize_text(texto)
-    
+
     puntaje = 0.0
     indicadores: list[str] = []
-    
+
     # Sort by length descending to match longer phrases first
     candidatos = sorted(
-        ((palabra, nivel) for nivel, palabras in PALABRAS_RIESGO.items() for palabra in palabras),
+        (
+            (palabra, nivel)
+            for nivel, palabras in PALABRAS_RIESGO.items()
+            for palabra in palabras
+        ),
         key=lambda item: len(item[0]),
         reverse=True,
     )
-    
+
     spans_ocupados: list[tuple[int, int]] = []
     for palabra, nivel in candidatos:
-        for coincidencia in re.finditer(r"\b" + re.escape(palabra) + r"\b", texto_normalizado):
+        for coincidencia in re.finditer(
+            r"\b" + re.escape(palabra) + r"\b", texto_normalizado
+        ):
             inicio, fin = coincidencia.span()
-            if any(inicio < fin_ocupado and fin > inicio_ocupado for inicio_ocupado, fin_ocupado in spans_ocupados):
+            if any(
+                inicio < fin_ocupado and fin > inicio_ocupado
+                for inicio_ocupado, fin_ocupado in spans_ocupados
+            ):
                 continue
             spans_ocupados.append((inicio, fin))
             puntaje += PESOS[nivel]
@@ -111,14 +116,18 @@ def evaluar_texto(texto: str) -> RiskAnalysis:
     else:
         nivel = "SIN INDICADORES DETECTADOS"
 
-    return {"puntaje": round(puntaje, 2), "nivel_riesgo": nivel, "indicadores": indicadores}
+    return {
+        "puntaje": round(puntaje, 2),
+        "nivel_riesgo": nivel,
+        "indicadores": indicadores,
+    }
 
 
 def identificar_perfil(analisis: RiskAnalysis) -> str:
     """Identify user profile based on risk analysis."""
     puntaje = analisis["puntaje"]
     indicadores = analisis["indicadores"]
-    
+
     if puntaje >= 1.0 and any(
         "dime tu edad" in indicador.lower()
         or "foto" in indicador.lower()

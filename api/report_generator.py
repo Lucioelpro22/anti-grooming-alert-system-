@@ -6,7 +6,6 @@ import json
 import os
 import re
 import tempfile
-import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,14 +14,13 @@ from typing import Any
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from api import audit_state
+from api.audit_state import EvidenceSecurityError
+from api.detect_patterns import RiskAnalysis
+
 CARPETA_INFORMES = Path("informes_generados")
 AUDIT_FILENAME = "audit.jsonl"
-SCHEMA_VERSION = 1
-AUDIT_LOCK = threading.RLock()
-
-
-class EvidenceSecurityError(RuntimeError):
-    """Secure evidence storage is unavailable or its integrity cannot be trusted."""
+SCHEMA_VERSION = 2
 
 
 def _decode_key(variable: str) -> bytes:
@@ -45,9 +43,9 @@ def _canonical(data: dict[str, Any]) -> bytes:
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     temporary: str | None = None
     try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
             temporary = handle.name
             os.chmod(temporary, 0o600)
@@ -67,16 +65,18 @@ def _audit_path() -> Path:
     return CARPETA_INFORMES / AUDIT_FILENAME
 
 
-def _read_verified_audit() -> list[dict[str, Any]]:
+def _read_verified_audit(*, check_checkpoint: bool = True) -> list[dict[str, Any]]:
     path = _audit_path()
     if not path.exists():
+        if check_checkpoint:
+            audit_state.verify(CARPETA_INFORMES, 0, "0" * 64)
         return []
     key = _decode_key("AUDIT_HMAC_KEY")
     previous_hash = "0" * 64
     entries: list[dict[str, Any]] = []
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise EvidenceSecurityError("No se pudo verificar la auditoría") from exc
     for line in lines:
         try:
@@ -87,16 +87,20 @@ def _read_verified_audit() -> list[dict[str, Any]]:
         if entry.get("previous_hash") != previous_hash:
             raise EvidenceSecurityError("Cadena de auditoría inválida")
         expected = hmac.new(key, _canonical(entry), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(entry_hash, expected):
+        if not isinstance(entry_hash, str) or not hmac.compare_digest(
+            entry_hash, expected
+        ):
             raise EvidenceSecurityError("Firma de auditoría inválida")
         entry["entry_hash"] = entry_hash
         entries.append(entry)
         previous_hash = entry_hash
+    if check_checkpoint:
+        audit_state.verify(CARPETA_INFORMES, len(entries), previous_hash)
     return entries
 
 
 def verificar_auditoria() -> dict[str, Any]:
-    with AUDIT_LOCK:
+    with audit_state.transaction(CARPETA_INFORMES):
         entries = _read_verified_audit()
     return {
         "valid": True,
@@ -106,7 +110,7 @@ def verificar_auditoria() -> dict[str, Any]:
 
 
 def _append_audit(action: str, report_id: str, actor: str) -> None:
-    with AUDIT_LOCK:
+    with audit_state.transaction(CARPETA_INFORMES):
         entries = _read_verified_audit()
         previous_hash = entries[-1]["entry_hash"] if entries else "0" * 64
         entry: dict[str, Any] = {
@@ -124,10 +128,11 @@ def _append_audit(action: str, report_id: str, actor: str) -> None:
         ]
         lines.append(json.dumps(entry, ensure_ascii=False, sort_keys=True))
         _atomic_write(_audit_path(), ("\n".join(lines) + "\n").encode("utf-8"))
+        audit_state.advance(CARPETA_INFORMES, len(entries) + 1, entry["entry_hash"])
 
 
 def _render_report(
-    mensaje: Any, analisis: dict, ip_info: dict, perfil: str, report_id: str
+    mensaje: Any, analisis: RiskAnalysis, ip_info: dict, perfil: str, report_id: str
 ) -> str:
     """Render report text. Original message content is stored separately in ciphertext."""
     fecha_emision = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S UTC")
@@ -193,14 +198,14 @@ NO SUSTITUYE DENUNCIA FORMAL ANTE AUTORIDADES
 
 
 def crear_informe(
-    mensaje: Any, analisis: dict, ip_info: dict, perfil: str, owner: str
+    mensaje: Any, analisis: RiskAnalysis, ip_info: dict, perfil: str, owner: str
 ) -> str:
     """Create and encrypt report with original message content preserved."""
     try:
         _decode_key("AUDIT_HMAC_KEY")
     except EvidenceSecurityError as exc:
         raise EvidenceSecurityError("Claves de auditoría no configuradas") from exc
-    
+
     report_id = uuid.uuid4().hex
     created_at = datetime.now(timezone.utc).isoformat()
     authenticated_metadata: dict[str, Any] = {
@@ -210,7 +215,7 @@ def crear_informe(
         "created_at": created_at,
         "cipher": "AES-256-GCM",
     }
-    
+
     # Preserve original message content and normalized analysis result
     evidence_bundle: dict[str, Any] = {
         "original_message_content": mensaje.contenido,
@@ -218,7 +223,7 @@ def crear_informe(
         "analysis_result": analisis,
         "detector_version": 1,
     }
-    
+
     nonce = os.urandom(12)
     try:
         ciphertext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).encrypt(
@@ -228,12 +233,12 @@ def crear_informe(
         )
     except EvidenceSecurityError as exc:
         raise EvidenceSecurityError("Claves de cifrado no configuradas") from exc
-    
+
     metadata = authenticated_metadata | {
         "nonce": base64.urlsafe_b64encode(nonce).decode("ascii"),
         "ciphertext_sha256": hashlib.sha256(ciphertext).hexdigest(),
     }
-    with AUDIT_LOCK:
+    with audit_state.transaction(CARPETA_INFORMES):
         _read_verified_audit()
         _atomic_write(CARPETA_INFORMES / f"informe_{report_id}.enc", ciphertext)
         _atomic_write(
@@ -252,7 +257,7 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
     metadata_path = CARPETA_INFORMES / f"informe_{informe_id}.json"
     if not encrypted_path.is_file() or not metadata_path.is_file():
         return {}
-    with AUDIT_LOCK:
+    with audit_state.transaction(CARPETA_INFORMES):
         _read_verified_audit()
         try:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -260,10 +265,13 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
             nonce = base64.b64decode(metadata["nonce"], altchars=b"-_", validate=True)
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             return {}
+        if not isinstance(metadata, dict):
+            return {}
         if (
             metadata.get("id") != informe_id
-            or metadata.get("schema_version") != SCHEMA_VERSION
+            or metadata.get("schema_version") not in {1, SCHEMA_VERSION}
             or metadata.get("cipher") != "AES-256-GCM"
+            or not isinstance(metadata.get("ciphertext_sha256"), str)
             or not hmac.compare_digest(
                 metadata.get("ciphertext_sha256", ""),
                 hashlib.sha256(ciphertext).hexdigest(),
@@ -278,7 +286,19 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
             plaintext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).decrypt(
                 nonce, ciphertext, _canonical(authenticated_metadata)
             )
-            evidence_bundle = json.loads(plaintext.decode("utf-8"))
+            content = plaintext.decode("utf-8")
+            if metadata["schema_version"] == 1:
+                # The unreleased hardening branch also wrote JSON with version 1.
+                try:
+                    evidence_bundle = json.loads(content)
+                except json.JSONDecodeError:
+                    evidence_bundle = {"report_text": content}
+            else:
+                evidence_bundle = json.loads(content)
+            if not isinstance(evidence_bundle, dict) or not isinstance(
+                evidence_bundle.get("report_text"), str
+            ):
+                return {}
         except (InvalidTag, ValueError, KeyError, UnicodeDecodeError):
             return {}
         if not can_read_all and metadata.get("owner") != requester:
@@ -287,6 +307,7 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
         _append_audit("report_read", informe_id, requester)
         return {
             "id": informe_id,
+            "contenido": evidence_bundle["report_text"],
             "original_message_content": evidence_bundle.get("original_message_content"),
             "report_text": evidence_bundle.get("report_text"),
             "analysis_result": evidence_bundle.get("analysis_result"),

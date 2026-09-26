@@ -72,3 +72,38 @@ ser revisados por asesoría legal local antes de usarse en producción.
 
 No hay credenciales predeterminadas y el servicio falla de forma segura si la
 configuración de autenticación está ausente o es inválida.
+
+## Actualización de evidencia y auditoría
+
+Antes de iniciar, exportá las variables del entorno: la aplicación no carga `.env`
+automáticamente. Se verifican el secreto JWT, hashes de usuarios, claves Base64 de
+32 bytes distintas y `AUDIT_STATE_DB`. Los ejemplos no son valores operativos.
+
+`AUDIT_STATE_DB` debe apuntar a una base SQLite fuera de `informes_generados`, en
+un directorio con permisos y copias de seguridad independientes. Todos los workers
+de una instalación deben compartir esa misma base en disco local. La transacción
+serializa las operaciones entre procesos y conserva el contador y hash final de
+la auditoría. No usar este diseño sobre NFS ni para réplicas con discos separados.
+
+Los informes nuevos usan esquema 2 y conservan exactamente el texto recibido.
+Se siguen leyendo los informes de esquema 1, tanto texto como JSON. La respuesta
+conserva `contenido` y añade `report_text`, `original_message_content` y
+`analysis_result`. En informes antiguos sin texto original, ese campo es `null`:
+no puede reconstruirse evidencia que nunca se guardó.
+
+Para una instalación nueva no hace falta migración. Para una existente:
+
+1. Detené todos los workers y respaldá las evidencias, claves y auditoría.
+2. Contrastá el historial HMAC con un respaldo independiente confiable y obtené
+   su cantidad de entradas y hash final revisados. La firma por sí sola no prueba
+   que el historial antiguo no haya sido truncado.
+3. Configurá `AUDIT_STATE_DB` y ejecutá desde la raíz del repositorio:
+   `python -m scripts.migrate_audit --entries CANTIDAD --head HASH_REVISADO`.
+4. Iniciá la API. Una discrepancia o historial ausente impide su arranque.
+
+Un fallo entre la escritura del historial y la confirmación del checkpoint deja
+el servicio bloqueado de forma segura. Requiere reconciliar ambos respaldos con
+revisión operativa; no borrar la base ni aceptar automáticamente el historial actual.
+La protección detecta cambios en los informes/auditoría mientras el checkpoint es
+confiable. Un atacante que controle ambos destinos o el proceso con sus claves
+requiere protección adicional, como un registro externo inmutable.

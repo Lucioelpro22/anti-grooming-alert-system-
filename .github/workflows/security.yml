@@ -30,6 +30,7 @@ jobs:
           cache-dependency-path: api/requirements.txt
 
       - name: Install runtime and security tools
+        id: install
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r api/requirements.txt
@@ -37,22 +38,27 @@ jobs:
 
       - name: Check formatting and lint
         run: |
-          python -m ruff format --check api/main.py api/security.py tests/test_auth_rbac.py scripts
+          python -m ruff format --check api tests scripts
           python -m ruff check api tests scripts
 
       - name: Check types
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: python -m mypy --cache-dir /tmp/mypy-cache api
 
       - name: Run tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: python -m pytest -q
 
       - name: Run Bandit
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: python -m bandit -q -r api scripts
 
       - name: Audit dependencies
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: python -m pip_audit -r api/requirements.txt
 
       - name: Scan repository for secrets
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         shell: bash
         run: |
           python -m detect_secrets scan --all-files \
@@ -70,4 +76,5 @@ jobs:
           PY
 
       - name: Validate patch whitespace
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: git diff --check
