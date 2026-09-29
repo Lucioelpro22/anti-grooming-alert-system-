@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="description" content="Aprende a proteger tus datos, cuentas, dispositivos y permisos de forma simple.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Escudo de Privacidad Digital</title>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Proyecto 3 de 6 · Herramientas de Crecimiento y Protección</p>
+      <h1>🛡️ Escudo de Privacidad Digital</h1>
+      <p class="subtitle">Yo decido qué comparto, quién puede acceder y cuándo necesito verificar.</p>
+    </div>
+    <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones principales">
+    <button class="tab active" data-view="datos">🔐 Mis datos</button>
+    <button class="tab" data-view="llaves">🗝️ Mis llaves</button>
+    <button class="tab" data-view="permisos">📱 Permisos</button>
+    <button class="tab" data-view="trampas">🕵️ Verifico primero</button>
+    <button class="tab" data-view="escudo">✅ Mi escudo</button>
+  </nav>
+
+  <main class="container">
+    <section id="datos" class="view active">
+      <h2>🔐 Mis datos</h2>
+      <p class="lead">No todos los datos tienen el mismo nivel de privacidad. Practico antes de compartir.</p>
+      <article id="dataCard" class="card" aria-live="polite"></article>
+      <div id="dataBadges" class="badges"></div>
+    </section>
+
+    <section id="llaves" class="view">
+      <h2>🗝️ Mis llaves digitales</h2>
+      <p class="lead">Una contraseña protege una cuenta. No necesito escribir aquí ninguna contraseña real.</p>
+
+      <article class="card">
+        <h3>Frase de práctica</h3>
+        <p>Una frase larga y fácil de recordar puede ser mejor que una palabra corta. Genera un ejemplo inventado y úsalo solo para practicar.</p>
+        <div id="practicePhrase" class="practice-phrase">Pulsa “Crear ejemplo”.</div>
+        <button id="makePhrase" type="button">Crear ejemplo local</button>
+        <p class="small">El ejemplo se crea en tu dispositivo y no se guarda como contraseña.</p>
+      </article>
+
+      <article class="card">
+        <h3>Reglas que cuidan mis cuentas</h3>
+        <label class="choice"><input type="checkbox" data-keyrule="unique"> Uso una contraseña diferente en cada cuenta importante.</label>
+        <label class="choice"><input type="checkbox" data-keyrule="private"> No comparto contraseñas ni códigos de verificación.</label>
+        <label class="choice"><input type="checkbox" data-keyrule="twofactor"> Activo verificación en dos pasos cuando está disponible.</label>
+        <label class="choice"><input type="checkbox" data-keyrule="recovery"> Reviso con una persona adulta cómo recuperar una cuenta.</label>
+      </article>
+    </section>
+
+    <section id="permisos" class="view">
+      <h2>📱 Permisos de las apps</h2>
+      <p class="lead">Una app debería pedir solo lo que necesita. Aquí practico decisiones; no cambiamos permisos reales del dispositivo.</p>
+      <article class="card permission-list">
+        <div class="permission"><span>📍 Ubicación exacta</span><select data-permission="location"><option value="">Elegir</option><option value="ask">Preguntar primero</option><option value="needed">Solo mientras la uso y si hace falta</option><option value="always">Siempre</option></select><p class="hint"></p></div>
+        <div class="permission"><span>🎤 Micrófono</span><select data-permission="microphone"><option value="">Elegir</option><option value="ask">Preguntar primero</option><option value="needed">Solo cuando una función lo necesita</option><option value="always">Siempre</option></select><p class="hint"></p></div>
+        <div class="permission"><span>📷 Cámara</span><select data-permission="camera"><option value="">Elegir</option><option value="ask">Preguntar primero</option><option value="needed">Solo cuando una función lo necesita</option><option value="always">Siempre</option></select><p class="hint"></p></div>
+        <div class="permission"><span>👥 Contactos</span><select data-permission="contacts"><option value="">Elegir</option><option value="ask">Preguntar primero</option><option value="needed">Solo si entiendo para qué</option><option value="always">Siempre</option></select><p class="hint"></p></div>
+        <div class="permission"><span>🖼️ Fotos y archivos</span><select data-permission="files"><option value="">Elegir</option><option value="ask">Preguntar primero</option><option value="needed">Solo las fotos o archivos que elijo</option><option value="always">Todo siempre</option></select><p class="hint"></p></div>
+      </article>
+    </section>
+
+    <section id="trampas" class="view">
+      <h2>🕵️ Verifico primero</h2>
+      <p class="lead">Algunos mensajes intentan apurarnos para conseguir contraseñas, códigos o datos. Practico con ejemplos inventados.</p>
+      <article id="trapCard" class="card" aria-live="polite"></article>
+      <div id="trapBadges" class="badges"></div>
+    </section>
+
+    <section id="escudo" class="view">
+      <h2>✅ Mi escudo</h2>
+      <article class="card">
+        <h3>Checklist de cuidado</h3>
+        <label class="choice"><input type="checkbox" data-shield="lock"> Mi dispositivo tiene bloqueo de pantalla.</label>
+        <label class="choice"><input type="checkbox" data-shield="updates"> Mantengo el sistema y las apps actualizados.</label>
+        <label class="choice"><input type="checkbox" data-shield="privacy"> Reviso privacidad y permisos de vez en cuando.</label>
+        <label class="choice"><input type="checkbox" data-shield="codes"> Nunca envío códigos de verificación a otra persona.</label>
+        <label class="choice"><input type="checkbox" data-shield="help"> Sé a quién pedir ayuda si pierdo acceso a una cuenta.</label>
+      </article>
+
+      <article class="card">
+        <h3>Mi persona de recuperación</h3>
+        <p class="small">Puede ser una persona adulta de confianza que me ayude a recuperar una cuenta o revisar una situación.</p>
+        <form id="recoveryForm" class="grid-form">
+          <input id="recoveryName" maxlength="50" placeholder="Nombre">
+          <input id="recoveryRelation" maxlength="40" placeholder="Relación">
+          <button type="submit">Guardar</button>
+        </form>
+        <p id="recoverySaved" class="status"></p>
+      </article>
+
+      <article class="card">
+        <h3>Mi progreso</h3>
+        <div class="progress-shell" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText">0% completado</p>
+      </article>
+
+      <article class="card danger-zone">
+        <h3>Empezar de nuevo</h3>
+        <p>Borra los datos educativos guardados por esta app en este dispositivo.</p>
+        <button id="resetAll" class="danger" type="button">Borrar progreso local</button>
+      </article>
+    </section>
+  </main>
+
+  <button id="credentialHelp" class="help-button" type="button">🔑 Me piden una contraseña o un código</button>
+
+  <dialog id="helpDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" aria-label="Cerrar">×</button>
+      <h2>No lo compartas todavía</h2>
+      <p class="comfort">Puedes parar y verificar. Una persona de confianza puede ayudarte.</p>
+      <ol>
+        <li>No envíes tu contraseña ni un código de verificación.</li>
+        <li>No abras enlaces si no sabes de dónde vienen.</li>
+        <li>Entra a la app o sitio oficial por tu cuenta para revisar.</li>
+        <li>Si tienes dudas, pide ayuda a una persona adulta de confianza.</li>
+      </ol>
+      <p class="small">Esta app no recibe ni revisa contraseñas reales.</p>
+    </form>
+  </dialog>
+
+  <footer>
+    <p>Proyecto abierto · Lucioelpro22 · MIT · Sin cuentas, publicidad ni análisis de contraseñas reales.</p>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
