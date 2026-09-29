@@ -1,0 +1,11 @@
+{
+  "name":"Laboratorio de Huella Digital",
+  "short_name":"Huella Digital",
+  "lang":"es-AR",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#faf8ff",
+  "theme_color":"#7c3aed",
+  "description":"Herramienta educativa para pensar antes de publicar y cuidar la huella digital.",
+  "icons":[{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
