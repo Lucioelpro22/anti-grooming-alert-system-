@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="description" content="Aprende a pensar antes de publicar y a cuidar tu huella digital.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Laboratorio de Huella Digital</title>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Proyecto 4 de 6 · Herramientas de Crecimiento y Protección</p>
+      <h1>👣 Laboratorio de Huella Digital</h1>
+      <p class="subtitle">Antes de publicar, pienso qué muestro, quién lo verá y cómo podría circular.</p>
+    </div>
+    <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones principales">
+    <button class="tab active" data-view="huella">👣 Mi huella</button>
+    <button class="tab" data-view="publicar">📣 Antes de publicar</button>
+    <button class="tab" data-view="consentimiento">📷 Fotos y permiso</button>
+    <button class="tab" data-view="simulador">🧪 Simulador</button>
+    <button class="tab" data-view="limpieza">🧹 Reviso mi huella</button>
+  </nav>
+
+  <main class="container">
+    <section id="huella" class="view active">
+      <h2>👣 ¿Qué es mi huella digital?</h2>
+      <p class="lead">Es la información que voy dejando cuando uso internet. Algunas cosas las publico yo y otras pueden aparecer de forma indirecta.</p>
+
+      <article class="card footprint direct">
+        <h3>🟣 Huella directa</h3>
+        <p>Lo que decido publicar: comentarios, fotos, nombres de usuario, videos o datos de un perfil.</p>
+      </article>
+      <article class="card footprint indirect">
+        <h3>🔵 Huella indirecta</h3>
+        <p>Información que puede aparecer sin que la escriba como dato principal: un uniforme, una calle al fondo, una ubicación en una foto o el horario de una actividad.</p>
+      </article>
+      <article class="card footprint shared">
+        <h3>🟢 Huella compartida</h3>
+        <p>Otras personas también pueden subir fotos, etiquetas o capturas donde aparezco. Por eso el consentimiento importa.</p>
+      </article>
+      <article class="card">
+        <h3>Una idea importante</h3>
+        <p><strong>Borrar ayuda, pero no siempre garantiza que desaparezca todo.</strong> Alguien pudo hacer una captura, reenviar o guardar una copia. Pensar antes de publicar reduce ese riesgo.</p>
+      </article>
+    </section>
+
+    <section id="publicar" class="view">
+      <h2>📣 Antes de publicar</h2>
+      <p class="lead">Practico con ejemplos inventados. No necesito subir nada real.</p>
+      <article id="postCard" class="card" aria-live="polite"></article>
+      <div id="postBadges" class="badges"></div>
+    </section>
+
+    <section id="consentimiento" class="view">
+      <h2>📷 Fotos y permiso</h2>
+      <p class="lead">Que una foto sea divertida para mí no significa que otra persona quiera que se publique.</p>
+      <article id="consentCard" class="card" aria-live="polite"></article>
+      <div id="consentBadges" class="badges"></div>
+    </section>
+
+    <section id="simulador" class="view">
+      <h2>🧪 Simulador de publicación</h2>
+      <p class="lead">Marca qué aparece en una publicación ficticia. El simulador te muestra qué convendría revisar.</p>
+
+      <article class="card">
+        <label class="choice"><input type="checkbox" data-signal="location"> Se ve mi ubicación o una calle reconocible.</label>
+        <label class="choice"><input type="checkbox" data-signal="school"> Aparece mi escuela, uniforme o insignia.</label>
+        <label class="choice"><input type="checkbox" data-signal="routine"> El texto dice dónde estaré y a qué hora.</label>
+        <label class="choice"><input type="checkbox" data-signal="friend"> Aparece otra persona identificable.</label>
+        <label class="choice"><input type="checkbox" data-signal="contact"> Se ve mi teléfono, correo o dato de contacto.</label>
+        <label class="choice"><input type="checkbox" data-signal="document"> Se ve una credencial, pasaje, entrada o documento.</label>
+        <label class="choice"><input type="checkbox" data-signal="none"> No aparece ninguno de esos datos.</label>
+      </article>
+
+      <article class="card">
+        <h3>Resultado de la revisión</h3>
+        <div id="simulatorResult" class="review-result">Marca elementos para revisar la publicación ficticia.</div>
+      </article>
+
+      <article class="card">
+        <h3>Mis 5 preguntas antes de publicar</h3>
+        <label class="choice"><input type="checkbox" data-question="audience"> ¿Sé quién puede verlo?</label>
+        <label class="choice"><input type="checkbox" data-question="location"> ¿Revisé si revela dónde estoy o estaré?</label>
+        <label class="choice"><input type="checkbox" data-question="others"> ¿Pedí permiso si aparece otra persona?</label>
+        <label class="choice"><input type="checkbox" data-question="screenshot"> ¿Estaría cómodo/a si alguien hiciera una captura?</label>
+        <label class="choice"><input type="checkbox" data-question="pause"> ¿Puedo esperar un minuto y volver a mirarlo antes de publicar?</label>
+      </article>
+    </section>
+
+    <section id="limpieza" class="view">
+      <h2>🧹 Reviso mi huella</h2>
+      <p class="lead">No necesito borrar todo. Puedo revisar qué sigue teniendo sentido que sea visible.</p>
+
+      <article class="card">
+        <h3>Checklist de revisión</h3>
+        <label class="choice"><input type="checkbox" data-clean="bio"> Revisé si mi biografía muestra demasiados datos.</label>
+        <label class="choice"><input type="checkbox" data-clean="oldposts"> Revisé publicaciones antiguas que ya no quiero visibles.</label>
+        <label class="choice"><input type="checkbox" data-clean="tags"> Revisé etiquetas o fotos donde aparezco.</label>
+        <label class="choice"><input type="checkbox" data-clean="audience"> Revisé quién puede ver mis publicaciones.</label>
+        <label class="choice"><input type="checkbox" data-clean="location"> Revisé publicaciones con ubicación o rutinas.</label>
+        <label class="choice"><input type="checkbox" data-clean="accounts"> Identifiqué cuentas viejas que ya no uso.</label>
+      </article>
+
+      <article class="card">
+        <h3>Mi progreso</h3>
+        <div class="progress-shell" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText">0% completado</p>
+      </article>
+
+      <article class="card danger-zone">
+        <h3>Reiniciar este laboratorio</h3>
+        <p>Borra solo el progreso local de este proyecto en este dispositivo.</p>
+        <button id="resetAll" class="danger" type="button">Borrar progreso local</button>
+      </article>
+    </section>
+  </main>
+
+  <button id="removeHelp" class="help-button" type="button">🧹 Quiero sacar algo de internet</button>
+
+  <dialog id="helpDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" aria-label="Cerrar">×</button>
+      <h2>Puedes pedir ayuda para retirarlo</h2>
+      <p class="comfort">Que algo esté publicado no significa que tengas que resolverlo solo/a.</p>
+      <ol>
+        <li>No discutas ni respondas bajo presión.</li>
+        <li>Guarda la dirección de la publicación o una captura útil, sin redistribuir contenido íntimo.</li>
+        <li>Habla con una persona adulta de confianza.</li>
+        <li>Usen las opciones oficiales de reportar, quitar etiqueta o solicitar eliminación.</li>
+        <li>Si hay amenazas, chantaje o contenido íntimo, pidan ayuda especializada u oficial.</li>
+      </ol>
+      <p class="small">Esta app no elimina contenido ni contacta plataformas automáticamente.</p>
+    </form>
+  </dialog>
+
+  <footer>
+    <p>Proyecto abierto · Lucioelpro22 · MIT · Sin carga de fotos ni análisis de perfiles reales.</p>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
