@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#db2777">
+  <meta name="description" content="Libro privado de recuerdos, sueños y cartas al futuro, guardado y cifrado en el dispositivo.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Libro de Recuerdos y Sueños</title>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Proyecto 5 de 6 · Herramientas de Crecimiento y Protección</p>
+      <h1>📖 Libro de Recuerdos y Sueños</h1>
+      <p class="subtitle">Un lugar privado para guardar lo que viví, lo que aprendí y lo que imagino para mi futuro.</p>
+    </div>
+    <div class="hero-actions">
+      <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+      <button id="lockBtn" class="secondary hidden" type="button">🔒 Cerrar libro</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="gate" class="gate card" aria-live="polite">
+      <div id="setupPanel" class="hidden">
+        <h2>🌸 Crear mi libro privado</h2>
+        <p>El contenido se cifra en este dispositivo. Crea una contraseña exclusiva para este libro.</p>
+        <form id="setupForm" class="stack">
+          <label>Contraseña del libro
+            <input id="setupPassword" type="password" minlength="8" autocomplete="new-password" required>
+          </label>
+          <label>Repetir contraseña
+            <input id="setupPasswordAgain" type="password" minlength="8" autocomplete="new-password" required>
+          </label>
+          <button type="submit">Crear y abrir mi libro</button>
+        </form>
+        <p class="warning">No reutilices una contraseña de correo, redes o juegos. Si pierdes esta contraseña, no podremos recuperar el contenido cifrado.</p>
+      </div>
+
+      <div id="unlockPanel" class="hidden">
+        <h2>🔐 Abrir mi libro</h2>
+        <form id="unlockForm" class="stack">
+          <label>Contraseña del libro
+            <input id="unlockPassword" type="password" autocomplete="current-password" required>
+          </label>
+          <button type="submit">Abrir</button>
+        </form>
+        <p id="unlockStatus" class="status" role="status"></p>
+        <div class="backup-import">
+          <button id="importBackupBtn" class="secondary" type="button">Importar respaldo cifrado</button>
+          <input id="backupFile" class="hidden" type="file" accept="application/json,.json">
+        </div>
+      </div>
+    </section>
+
+    <div id="bookApp" class="hidden">
+      <nav class="tabs" aria-label="Secciones del libro">
+        <button class="tab active" data-view="recuerdos">📸 Mis recuerdos</button>
+        <button class="tab" data-view="suenos">🌈 Mis sueños</button>
+        <button class="tab" data-view="cartas">💌 Carta al futuro</button>
+        <button class="tab" data-view="milibro">📚 Mi libro</button>
+      </nav>
+
+      <section id="recuerdos" class="view active">
+        <h2>📸 Mis recuerdos</h2>
+        <p class="lead">Guardo un momento que quiero recordar. La foto es opcional y queda cifrada dentro de este dispositivo.</p>
+        <article class="card">
+          <form id="memoryForm" class="stack">
+            <label>Título
+              <input id="memoryTitle" maxlength="80" required placeholder="Un día especial">
+            </label>
+            <label>Fecha del recuerdo
+              <input id="memoryDate" type="date">
+            </label>
+            <label>¿Qué pasó?
+              <textarea id="memoryStory" maxlength="4000" rows="5" required placeholder="Escribe con tus palabras..."></textarea>
+            </label>
+            <label>Foto opcional
+              <input id="memoryPhoto" type="file" accept="image/*">
+            </label>
+            <p class="small">La imagen se reduce de tamaño antes de cifrarse. No se sube a internet.</p>
+            <button type="submit">Guardar recuerdo</button>
+          </form>
+          <p id="memoryStatus" class="status" role="status"></p>
+        </article>
+        <div id="memoryList" class="timeline"></div>
+      </section>
+
+      <section id="suenos" class="view">
+        <h2>🌈 Mis sueños</h2>
+        <p class="lead">Puedo imaginar sin que todo tenga que convertirse en una obligación.</p>
+        <article class="card">
+          <form id="dreamForm" class="stack">
+            <label>Tipo de sueño
+              <select id="dreamType">
+                <option>Quiero aprender</option>
+                <option>Quiero crear</option>
+                <option>Quiero ser</option>
+                <option>Quiero conocer</option>
+                <option>Quiero viajar</option>
+                <option>Quiero ayudar</option>
+                <option>Otro sueño</option>
+              </select>
+            </label>
+            <label>Mi sueño
+              <input id="dreamText" maxlength="180" required placeholder="Quiero aprender a...">
+            </label>
+            <label>¿Por qué me importa?
+              <textarea id="dreamWhy" maxlength="1500" rows="4" placeholder="Porque..."></textarea>
+            </label>
+            <label>Año que imagino (opcional)
+              <input id="dreamYear" type="number" min="2026" max="2126" inputmode="numeric">
+            </label>
+            <button type="submit">Guardar sueño</button>
+          </form>
+        </article>
+        <div id="dreamList" class="dream-grid"></div>
+      </section>
+
+      <section id="cartas" class="view">
+        <h2>💌 Carta a mi yo del futuro</h2>
+        <p class="lead">Escribo algo que me gustaría volver a leer más adelante.</p>
+        <article class="card">
+          <form id="letterForm" class="stack">
+            <label>Título
+              <input id="letterTitle" maxlength="100" required placeholder="Para mí, en el futuro">
+            </label>
+            <label>Quiero abrirla a partir de
+              <input id="letterDate" type="date" required>
+            </label>
+            <label>Mi carta
+              <textarea id="letterText" maxlength="6000" rows="8" required placeholder="Hoy quiero contarte que..."></textarea>
+            </label>
+            <button type="submit">Guardar carta cifrada</button>
+          </form>
+        </article>
+        <div id="letterList" class="timeline"></div>
+      </section>
+
+      <section id="milibro" class="view">
+        <h2>📚 Mi libro</h2>
+        <article class="card">
+          <h3>Mi portada</h3>
+          <form id="profileForm" class="stack">
+            <label>Nombre o apodo
+              <input id="profileName" maxlength="60" placeholder="Como quiero que me nombre mi libro">
+            </label>
+            <label>Frase para mi portada
+              <input id="profilePhrase" maxlength="140" placeholder="Una frase que me represente">
+            </label>
+            <label>Color favorito
+              <input id="profileColor" type="color" value="#db2777">
+            </label>
+            <button type="submit">Guardar portada</button>
+          </form>
+          <div id="coverPreview" class="cover-preview"></div>
+        </article>
+
+        <article class="card">
+          <h3>Resumen</h3>
+          <div id="bookStats" class="stats"></div>
+        </article>
+
+        <article class="card">
+          <h3>💾 Respaldo cifrado</h3>
+          <p>Descarga una copia de seguridad. El archivo sigue cifrado y necesita la misma contraseña para abrirse.</p>
+          <button id="exportBackupBtn" type="button">Descargar respaldo cifrado</button>
+          <p class="small">Guárdalo en un lugar seguro. Si borras los datos del navegador sin respaldo, los recuerdos pueden perderse.</p>
+        </article>
+
+        <article class="card danger-zone">
+          <h3>🗑️ Borrar todo el libro</h3>
+          <p>Elimina de este dispositivo el contenido cifrado, la portada y la configuración de la contraseña.</p>
+          <button id="resetBookBtn" class="danger" type="button">Borrar mi libro de este dispositivo</button>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="confirmDialog">
+    <form method="dialog" class="dialog-card">
+      <h2 id="confirmTitle">Confirmar</h2>
+      <p id="confirmText"></p>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary">Cancelar</button>
+        <button id="confirmAction" value="confirm" class="danger">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer>
+    <p>Proyecto abierto · Lucioelpro22 · MIT · Cifrado local · Sin nube, publicidad ni cuentas externas.</p>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
