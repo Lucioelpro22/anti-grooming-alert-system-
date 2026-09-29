@@ -1,0 +1,11 @@
+{
+  "name":"Semáforo de Conversaciones Digitales",
+  "short_name":"Semáforo Digital",
+  "lang":"es-AR",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#f8fafc",
+  "theme_color":"#2563eb",
+  "description":"Herramienta educativa para reconocer señales y practicar límites en conversaciones digitales.",
+  "icons":[{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
