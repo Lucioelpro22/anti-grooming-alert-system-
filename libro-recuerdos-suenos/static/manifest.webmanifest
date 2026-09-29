@@ -1,0 +1,11 @@
+{
+  "name":"Libro de Recuerdos y Sueños",
+  "short_name":"Mi Libro",
+  "lang":"es-AR",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#fff8fb",
+  "theme_color":"#db2777",
+  "description":"Libro privado y cifrado para guardar recuerdos, sueños y cartas al futuro.",
+  "icons":[{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
