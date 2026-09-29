@@ -1,9 +1,14 @@
+import base64
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from api.detect_patterns import evaluar_texto, identificar_perfil
 from api.ip_analysis import analizar_ip
+from api.key_management import current_key
 from api.pseudonymization import pseudonymize
 from api.report_generator import leer_informe
+from api.retention import EvidenceStatus, can_transition, retention_deadline
 
 
 def test_critical_multi_indicator_message():
@@ -58,3 +63,25 @@ def test_pseudonymization_is_stable_and_non_reversible(monkeypatch):
     first = pseudonymize("external-user-123")
     assert first == pseudonymize(" external-user-123 ")
     assert first != "external-user-123"
+
+
+def test_key_ring_selects_current_version_without_exposing_material(monkeypatch):
+    old = base64.urlsafe_b64encode(b"o" * 32).decode()
+    current = base64.urlsafe_b64encode(b"c" * 32).decode()
+    monkeypatch.delenv("EVIDENCE_ENCRYPTION_KEY", raising=False)
+    monkeypatch.setenv(
+        "EVIDENCE_ENCRYPTION_KEYS_JSON", json.dumps({"v1": old, "v2": current})
+    )
+    monkeypatch.setenv("EVIDENCE_ENCRYPTION_CURRENT_KEY_ID", "v2")
+    key_id, key = current_key()
+    assert key_id == "v2"
+    assert key == b"c" * 32
+
+
+def test_legal_hold_cannot_be_deleted():
+    assert can_transition(EvidenceStatus.ACTIVE, EvidenceStatus.LEGAL_HOLD)
+    assert not can_transition(
+        EvidenceStatus.LEGAL_HOLD, EvidenceStatus.DELETION_PENDING
+    )
+    created = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    assert retention_deadline(created, 30).day == 31

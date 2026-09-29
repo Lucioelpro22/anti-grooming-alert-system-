@@ -16,6 +16,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
+from api.key_management import current_key
 from api.report_generator import _decode_key
 
 
@@ -119,7 +120,7 @@ def load_users() -> dict[str, StoredUser]:
 
 
 def validate_encryption_keys() -> None:
-    evidence_key = _decode_key("EVIDENCE_ENCRYPTION_KEY")
+    _, evidence_key = current_key()
     audit_key = _decode_key("AUDIT_HMAC_KEY")
     if evidence_key == audit_key:
         raise RuntimeError("Las claves de cifrado y auditoría deben ser distintas")

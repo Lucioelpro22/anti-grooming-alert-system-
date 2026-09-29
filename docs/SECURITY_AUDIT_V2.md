@@ -19,6 +19,10 @@ dependencias, tests y GitHub Actions sobre `main` antes de esta rama.
   abuso de memoria.
 - Se corrigió el marco legal argentino y se añadió `SECURITY.md`.
 - Se agregaron CodeQL y Dependabot.
+- Se agregó un key ring versionado para rotación de claves sin perder lectura
+  de informes históricos.
+- Se definieron estados de retención y la regla de que `LEGAL_HOLD` no puede
+  pasar a eliminación.
 
 ## Verificación
 
@@ -33,5 +37,7 @@ caché excluidos por el workflow.
 - La persistencia sigue siendo filesystem cifrado; PostgreSQL y un almacén de
   evidencia inmutable requieren infraestructura adicional.
 - La rotación de claves y el legal hold necesitan un diseño operativo antes de
-  manejar evidencia real.
+  manejar evidencia real; esta rama aporta la validación criptográfica y las
+  reglas de transición, pero no inventa un almacén externo de secretos ni una
+  tarea automática de borrado.
 - Las GitHub Actions deben fijarse por SHA en una siguiente iteración.

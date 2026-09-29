@@ -17,7 +17,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from api import audit_state
 from api.audit_state import EvidenceSecurityError
 from api.detect_patterns import RiskAnalysis
+from api.key_management import current_key, key_for
 from api.pseudonymization import pseudonymize
+from api.retention import EvidenceStatus
 
 CARPETA_INFORMES = Path("informes_generados")
 AUDIT_FILENAME = "audit.jsonl"
@@ -223,9 +225,12 @@ def crear_informe(
         "detector_version": 1,
     }
 
+    key_id, encryption_key = current_key()
     nonce = os.urandom(12)
+    authenticated_metadata["key_id"] = key_id
+    evidence_bundle["retention_status"] = EvidenceStatus.ACTIVE.value
     try:
-        ciphertext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).encrypt(
+        ciphertext = AESGCM(encryption_key).encrypt(
             nonce,
             json.dumps(evidence_bundle, ensure_ascii=False).encode("utf-8"),
             _canonical(authenticated_metadata),
@@ -282,11 +287,22 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
         ):
             return {}
         try:
+            authenticated_fields: tuple[str, ...] = (
+                "schema_version",
+                "id",
+                "owner",
+                "created_at",
+                "cipher",
+            )
+            if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get(
+                "key_id"
+            ):
+                authenticated_fields += ("key_id",)
             authenticated_metadata = {
-                key: metadata[key]
-                for key in ("schema_version", "id", "owner", "created_at", "cipher")
+                key: metadata[key] for key in authenticated_fields
             }
-            plaintext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).decrypt(
+            encryption_key = key_for(str(metadata.get("key_id", "legacy")))
+            plaintext = AESGCM(encryption_key).decrypt(
                 nonce, ciphertext, _canonical(authenticated_metadata)
             )
             content = plaintext.decode("utf-8")
@@ -314,4 +330,7 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
             "original_message_content": evidence_bundle.get("original_message_content"),
             "report_text": evidence_bundle.get("report_text"),
             "analysis_result": evidence_bundle.get("analysis_result"),
+            "retention_status": evidence_bundle.get(
+                "retention_status", EvidenceStatus.ACTIVE.value
+            ),
         }
