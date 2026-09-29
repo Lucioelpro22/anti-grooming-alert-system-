@@ -19,7 +19,7 @@ from api.audit_state import EvidenceSecurityError
 from api.detect_patterns import RiskAnalysis
 from api.key_management import current_key, key_for
 from api.pseudonymization import pseudonymize
-from api.retention import EvidenceStatus
+from api.retention import EvidenceStatus, can_transition
 
 CARPETA_INFORMES = Path("informes_generados")
 AUDIT_FILENAME = "audit.jsonl"
@@ -215,6 +215,7 @@ def crear_informe(
         "owner": owner,
         "created_at": created_at,
         "cipher": "AES-256-GCM",
+        "retention_status": EvidenceStatus.ACTIVE.value,
     }
 
     # Preserve original message content and normalized analysis result
@@ -298,6 +299,10 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
                 "key_id"
             ):
                 authenticated_fields += ("key_id",)
+            if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get(
+                "retention_status"
+            ):
+                authenticated_fields += ("retention_status",)
             authenticated_metadata = {
                 key: metadata[key] for key in authenticated_fields
             }
@@ -334,3 +339,98 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
                 "retention_status", EvidenceStatus.ACTIVE.value
             ),
         }
+
+
+def actualizar_estado_informe(
+    informe_id: str,
+    nuevo_estado: EvidenceStatus,
+    actor: str,
+) -> EvidenceStatus:
+    """Change evidence lifecycle state while re-authenticating the ciphertext.
+
+    A legal hold cannot be removed through this operation. Every transition is
+    appended to the tamper-evident audit chain.
+    """
+    if not re.fullmatch(
+        r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-f]{32})",
+        informe_id,
+        flags=re.IGNORECASE,
+    ):
+        raise EvidenceSecurityError("Identificador de informe inválido")
+    encrypted_path = CARPETA_INFORMES / f"informe_{informe_id}.enc"
+    metadata_path = CARPETA_INFORMES / f"informe_{informe_id}.json"
+    with audit_state.transaction(CARPETA_INFORMES):
+        _read_verified_audit()
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            ciphertext = encrypted_path.read_bytes()
+            nonce = base64.b64decode(metadata["nonce"], altchars=b"-_", validate=True)
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise EvidenceSecurityError("Informe no disponible") from exc
+        if not isinstance(metadata, dict) or metadata.get("id") != informe_id:
+            raise EvidenceSecurityError("Informe no disponible")
+        current_status = EvidenceStatus(
+            metadata.get("retention_status", EvidenceStatus.ACTIVE.value)
+        )
+        if not can_transition(current_status, nuevo_estado):
+            raise EvidenceSecurityError("Transición de retención no permitida")
+        fields: tuple[str, ...] = (
+            "schema_version",
+            "id",
+            "owner",
+            "created_at",
+            "cipher",
+        )
+        if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get("key_id"):
+            fields += ("key_id",)
+        if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get(
+            "retention_status"
+        ):
+            fields += ("retention_status",)
+        authenticated_metadata = {key: metadata[key] for key in fields}
+        try:
+            plaintext = AESGCM(key_for(str(metadata.get("key_id", "legacy")))).decrypt(
+                nonce, ciphertext, _canonical(authenticated_metadata)
+            )
+            bundle = json.loads(plaintext.decode("utf-8"))
+        except (
+            InvalidTag,
+            ValueError,
+            KeyError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as exc:
+            raise EvidenceSecurityError("Evidencia no pudo ser verificada") from exc
+        if not isinstance(bundle, dict):
+            raise EvidenceSecurityError("Evidencia no pudo ser verificada")
+        bundle["retention_status"] = nuevo_estado.value
+        key_id, encryption_key = current_key()
+        metadata["key_id"] = key_id
+        metadata["retention_status"] = nuevo_estado.value
+        authenticated_metadata = {
+            key: metadata[key]
+            for key in (
+                "schema_version",
+                "id",
+                "owner",
+                "created_at",
+                "cipher",
+                "key_id",
+                "retention_status",
+            )
+        }
+        new_nonce = os.urandom(12)
+        new_ciphertext = AESGCM(encryption_key).encrypt(
+            new_nonce,
+            json.dumps(bundle, ensure_ascii=False).encode("utf-8"),
+            _canonical(authenticated_metadata),
+        )
+        metadata["nonce"] = base64.urlsafe_b64encode(new_nonce).decode("ascii")
+        metadata["ciphertext_sha256"] = hashlib.sha256(new_ciphertext).hexdigest()
+        _atomic_write(encrypted_path, new_ciphertext)
+        _atomic_write(
+            metadata_path,
+            json.dumps(metadata, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+        )
+        _append_audit("evidence_status_changed", informe_id, actor)
+    return nuevo_estado

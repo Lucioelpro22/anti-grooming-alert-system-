@@ -22,6 +22,7 @@ from api.auth import (
     validate_configuration,
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
+from api.retention import EvidenceStatus
 from api.security import REPORT_LIMITER, ApiShieldMiddleware, env_list
 
 
@@ -101,6 +102,10 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class EstadoInforme(BaseModel):
+    estado: EvidenceStatus
+
+
 @app.post("/token", response_model=TokenResponse)
 def login(
     request: Request,
@@ -172,7 +177,7 @@ def obtener_informe(
         informe = report_generator.leer_informe(
             informe_id,
             requester=user.username,
-            can_read_all=user.role in {Role.ADMIN, Role.AUDITOR},
+            can_read_all=user.role in {Role.ADMIN, Role.AUDITOR, Role.SUPERVISOR},
         )
     except report_generator.EvidenceSecurityError as exc:
         raise HTTPException(
@@ -200,6 +205,23 @@ async def obtener_jurisdiccion(country_code: str):
         "reporting_channels": policy.reporting_channels,
         "cross_border_review_required": policy.cross_border_review_required,
     }
+
+
+@app.patch("/informe/{informe_id}/estado", response_model=EstadoInforme)
+def cambiar_estado_informe(
+    informe_id: str,
+    cambio: EstadoInforme,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN, Role.SUPERVISOR))],
+):
+    try:
+        estado = report_generator.actualizar_estado_informe(
+            informe_id, cambio.estado, user.username
+        )
+    except report_generator.EvidenceSecurityError as exc:
+        raise HTTPException(
+            status_code=409, detail="Cambio de estado no permitido"
+        ) from exc
+    return EstadoInforme(estado=estado)
 
 
 @app.get("/estado")

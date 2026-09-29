@@ -25,6 +25,9 @@ dependencias, tests y GitHub Actions sobre `main` antes de esta rama.
   pasar a eliminación.
 - Se agregó una interfaz de backend Redis para despliegues multi-worker; el
   backend solo se activa cuando la infraestructura lo provee explícitamente.
+- Se agregó un repositorio PostgreSQL con SQLAlchemy para despliegues que
+  requieran persistencia centralizada. El filesystem cifrado sigue siendo el
+  valor compatible por defecto.
 
 ## Verificación
 
@@ -36,8 +39,8 @@ caché excluidos por el workflow.
 
 - Para producción se recomienda rate limiting distribuido, no solo memoria de
   proceso.
-- La persistencia sigue siendo filesystem cifrado; PostgreSQL y un almacén de
-  evidencia inmutable requieren infraestructura adicional.
+- PostgreSQL y un almacén de evidencia inmutable requieren infraestructura
+  adicional y deben activarse mediante un despliegue revisado.
 - La rotación de claves y el legal hold necesitan un diseño operativo antes de
   manejar evidencia real; esta rama aporta la validación criptográfica y las
   reglas de transición, pero no inventa un almacén externo de secretos ni una

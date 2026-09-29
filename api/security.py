@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 from starlette.types import Message, Receive, Scope, Send
 
+from api.rate_limit_backend import RedisRateLimitBackend
+
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
 
@@ -54,8 +56,32 @@ class SlidingWindowRateLimiter:
         self.max_keys = max_keys
         self._requests: dict[str, list[float]] = {}
         self._lock = threading.Lock()
+        self._distributed_backend: RedisRateLimitBackend | None = None
+
+    def _redis_backend(self) -> RedisRateLimitBackend | None:
+        if os.getenv("RATE_LIMIT_BACKEND", "memory").lower() != "redis":
+            return None
+        if self._distributed_backend is None:
+            url = os.getenv("REDIS_URL")
+            if not url:
+                return None
+            try:
+                import redis  # type: ignore[import-not-found]
+
+                client = redis.Redis.from_url(url, decode_responses=True)
+                self._distributed_backend = RedisRateLimitBackend(client)
+            except (ImportError, ValueError):
+                return None
+        return self._distributed_backend
 
     def check(self, key: str) -> RateLimitResult:
+        backend = self._redis_backend()
+        if backend is not None:
+            try:
+                result = backend.check(key, self.attempts, self.window_seconds)
+                return RateLimitResult(result.allowed, result.retry_after)
+            except Exception:  # noqa: BLE001
+                return RateLimitResult(False, self.window_seconds)
         now = time.monotonic()
         cutoff = now - self.window_seconds
         with self._lock:

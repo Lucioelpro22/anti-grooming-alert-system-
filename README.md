@@ -110,3 +110,12 @@ revisión operativa; no borrar la base ni aceptar automáticamente el historial 
 La protección detecta cambios en los informes/auditoría mientras el checkpoint es
 confiable. Un atacante que controle ambos destinos o el proceso con sus claves
 requiere protección adicional, como un registro externo inmutable.
+
+## Segunda etapa de operación
+
+Los estados de evidencia se cambian mediante `PATCH /informe/{id}/estado` y
+requieren rol `admin` o `supervisor`. Un informe en `LEGAL_HOLD` no puede pasar a
+eliminación. Para despliegues con varios workers, definí `RATE_LIMIT_BACKEND=redis`
+y `REDIS_URL`; si Redis no responde, el límite falla cerrado. Para persistencia
+centralizada, configurá un `DATABASE_URL` PostgreSQL y desplegá explícitamente el
+repositorio SQLAlchemy; la aplicación no migra ni cambia de almacenamiento sola.
