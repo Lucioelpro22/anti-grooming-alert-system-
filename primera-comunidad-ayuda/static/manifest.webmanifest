@@ -1,0 +1,11 @@
+{
+  "name":"Mi Primera Comunidad de Ayuda",
+  "short_name":"Comunidad Ayuda",
+  "lang":"es-AR",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#f7fcf8",
+  "theme_color":"#15803d",
+  "description":"Tablero local de buenas acciones, gratitud y desafíos solidarios.",
+  "icons":[{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
