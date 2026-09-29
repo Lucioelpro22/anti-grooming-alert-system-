@@ -46,9 +46,12 @@ class RateLimitResult:
 
 
 class SlidingWindowRateLimiter:
-    def __init__(self, attempts: int = 120, window_seconds: int = 60) -> None:
+    def __init__(
+        self, attempts: int = 120, window_seconds: int = 60, max_keys: int = 10_000
+    ) -> None:
         self.attempts = attempts
         self.window_seconds = window_seconds
+        self.max_keys = max_keys
         self._requests: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
@@ -56,6 +59,16 @@ class SlidingWindowRateLimiter:
         now = time.monotonic()
         cutoff = now - self.window_seconds
         with self._lock:
+            if len(self._requests) >= self.max_keys and key not in self._requests:
+                stale = [
+                    name
+                    for name, values in self._requests.items()
+                    if not values or values[-1] <= cutoff
+                ]
+                for name in stale[: max(1, len(stale) // 2)]:
+                    self._requests.pop(name, None)
+                if len(self._requests) >= self.max_keys:
+                    return RateLimitResult(False, self.window_seconds)
             recent = [value for value in self._requests.get(key, []) if value > cutoff]
             if len(recent) >= self.attempts:
                 retry_after = max(1, int(self.window_seconds - (now - recent[0])))

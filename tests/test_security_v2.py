@@ -1,7 +1,8 @@
 from pathlib import Path
 
-from api.detect_patterns import evaluar_texto
+from api.detect_patterns import evaluar_texto, identificar_perfil
 from api.ip_analysis import analizar_ip
+from api.pseudonymization import pseudonymize
 from api.report_generator import leer_informe
 
 
@@ -43,3 +44,17 @@ def test_report_reader_rejects_path_and_glob_injection(tmp_path, monkeypatch):
     Path("informes_generados").mkdir()
     Path("informes_generados/informe_safe.enc").write_bytes(b"secret")
     assert leer_informe("../*", requester="analyst") == {}
+
+
+def test_profile_categories_are_neutral_and_require_human_review():
+    result = evaluar_texto("dime tu edad no le cuentes a nadie")
+    profile = identificar_perfil(result)
+    assert profile == "CRITICAL_RISK_HUMAN_REVIEW_REQUIRED"
+    assert "AGRESOR" not in profile
+
+
+def test_pseudonymization_is_stable_and_non_reversible(monkeypatch):
+    monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", "test-pseudonym-key")
+    first = pseudonymize("external-user-123")
+    assert first == pseudonymize(" external-user-123 ")
+    assert first != "external-user-123"

@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from api import audit_state
 from api.audit_state import EvidenceSecurityError
 from api.detect_patterns import RiskAnalysis
+from api.pseudonymization import pseudonymize
 
 CARPETA_INFORMES = Path("informes_generados")
 AUDIT_FILENAME = "audit.jsonl"
@@ -147,10 +148,12 @@ PLATAFORMA: {mensaje.plataforma or "No especificada"}
 ----------------------------------------------------------------------
 DATOS DE LA COMUNICACIÓN
 ----------------------------------------------------------------------
-Remitente: {mensaje.remitente_id}
-Destinatario: {mensaje.destinatario_id}
+Remitente pseudonimizado: {pseudonymize(mensaje.remitente_id)}
+Destinatario pseudonimizado: {pseudonymize(mensaje.destinatario_id)}
 Fecha mensaje: {mensaje.fecha_hora}
-IP origen: {mensaje.ip_origen or "No registrada"}
+IP declarada por la fuente: {mensaje.ip_origen or "No registrada"}
+Fuente IP: {getattr(mensaje, "ip_source", "CLIENT_DECLARED")}
+IP verificada: {getattr(mensaje, "ip_verified", False)}
 
 ----------------------------------------------------------------------
 ANÁLISIS DE RIESGO
@@ -174,16 +177,10 @@ Nota: {ip_info.get("nota", "Sin observaciones")}
 CONCLUSIONES
 ----------------------------------------------------------------------
 """
-    if "AGRESOR" in perfil:
-        contenido += """⚠️ RIESGO ELEVADO — ACCIONES RECOMENDADAS:
-- Preservar toda la evidencia sin modificar
-- Bloquear al usuario inmediatamente
-- Presentar denuncia ante autoridad competente
-- Solicitar datos reales del titular por mandamiento judicial
-- Acompañar a la persona menor con adultos de confianza
+    if analisis["puntaje"] > 0:
+        contenido += """ℹ️ Indicadores detectados — preservar evidencia y solicitar revisión humana.
+El resultado automatizado es apoyo técnico y no identifica culpables ni reemplaza una decisión humana.
 """
-    elif analisis["puntaje"] > 0:
-        contenido += """ℹ️ Señales de riesgo — mantener vigilancia y conversar con la persona menor"""
     else:
         contenido += """✅ Sin indicadores de riesgo detectados"""
     return (
@@ -206,7 +203,9 @@ def crear_informe(
     except EvidenceSecurityError as exc:
         raise EvidenceSecurityError("Claves de auditoría no configuradas") from exc
 
-    report_id = uuid.uuid4().hex
+    # New reports use a complete canonical UUID. Legacy 32-hex IDs remain
+    # readable for backwards compatibility, but are never generated again.
+    report_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
     authenticated_metadata: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -251,7 +250,11 @@ def crear_informe(
 
 def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) -> dict:
     """Read and decrypt report, returning original message and analysis."""
-    if not re.fullmatch(r"[0-9a-f]{32}", informe_id):
+    if not re.fullmatch(
+        r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-f]{32})",
+        informe_id,
+        flags=re.IGNORECASE,
+    ):
         return {}
     encrypted_path = CARPETA_INFORMES / f"informe_{informe_id}.enc"
     metadata_path = CARPETA_INFORMES / f"informe_{informe_id}.json"

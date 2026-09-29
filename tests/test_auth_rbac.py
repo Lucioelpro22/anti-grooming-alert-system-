@@ -40,6 +40,11 @@ def client(monkeypatch, tmp_path):
             "password_hash": PasswordHash.recommended().hash(PASSWORD),
             "role": "auditor",
         },
+        {
+            "username": "supervisor",
+            "password_hash": PasswordHash.recommended().hash(PASSWORD),
+            "role": "supervisor",
+        },
     ]
     monkeypatch.setenv("JWT_SECRET", "test-secret-that-is-longer-than-32-bytes")
     monkeypatch.setenv("AUTH_USERS_JSON", json.dumps(users))

@@ -22,6 +22,7 @@ from api.report_generator import _decode_key
 class Role(str, Enum):
     ADMIN = "admin"
     ANALYST = "analyst"
+    SUPERVISOR = "supervisor"
     AUDITOR = "auditor"
 
 
@@ -218,6 +219,12 @@ class LoginRateLimiter:
         key = self._key(request, username)
         cutoff = time.monotonic() - self.window_seconds
         with self._lock:
+            if len(self._failures) > 10_000 and key not in self._failures:
+                self._failures = {
+                    name: values
+                    for name, values in self._failures.items()
+                    if values and values[-1] > cutoff
+                }
             recent = [value for value in self._failures.get(key, []) if value > cutoff]
             self._failures[key] = recent
             if len(recent) >= self.attempts:

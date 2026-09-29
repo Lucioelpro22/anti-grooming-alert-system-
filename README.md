@@ -7,7 +7,7 @@ Software de ciberseguridad diseñado para detectar, identificar y documentar con
 ## 🎯 Funcionalidades
 - ✅ Detección de patrones de riesgo en lenguaje y comportamiento
 - ✅ Análisis de direcciones IP y datos de conexión
-- ✅ Identificación de perfiles: probable agresor / en seguimiento / sin riesgo
+- ✅ Priorización neutral de indicadores para revisión humana
 - ✅ Generación automática de informes técnicos con ID único
 - ✅ Conjunto completo de casos de prueba para validación
 - ✅ Guía de presentación ante organismos públicos y privados
@@ -32,7 +32,10 @@ Software de ciberseguridad diseñado para detectar, identificar y documentar con
 ---
 
 🔗 Autor: @Lucioelpro22
-📅 Versión: 1.0.0
+📅 Versión: 3.6.0
+
+El sistema no identifica agresores ni determina culpabilidad. Sus resultados son
+indicadores automatizados de apoyo y siempre requieren revisión humana.
 
 ## Seguridad V3.2
 

@@ -124,17 +124,14 @@ def evaluar_texto(texto: str) -> RiskAnalysis:
 
 
 def identificar_perfil(analisis: RiskAnalysis) -> str:
-    """Identify user profile based on risk analysis."""
+    """Return a neutral triage category; never accuse or identify a person."""
     puntaje = analisis["puntaje"]
-    indicadores = analisis["indicadores"]
-
-    if puntaje >= 1.0 and any(
-        "dime tu edad" in indicador.lower()
-        or "foto" in indicador.lower()
-        or "secreto" in indicador.lower()
-        for indicador in indicadores
-    ):
-        return "PROBABLE AGRESOR (adulto/perfil de riesgo)"
     if puntaje <= 0:
-        return "SIN INDICADORES DE RIESGO"
-    return "REQUIERE SEGUIMIENTO"
+        return "NO_SIGNIFICANT_SIGNAL"
+    if puntaje >= 2.0:
+        return "CRITICAL_RISK_HUMAN_REVIEW_REQUIRED"
+    if puntaje >= 1.0:
+        return "HIGH_RISK_HUMAN_REVIEW_REQUIRED"
+    if puntaje >= 0.5:
+        return "MODERATE_RISK_HUMAN_REVIEW_REQUIRED"
+    return "LOW_RISK_HUMAN_REVIEW_REQUIRED"

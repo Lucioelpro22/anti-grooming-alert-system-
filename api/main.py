@@ -1,6 +1,8 @@
 import unicodedata
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from enum import Enum
+from ipaddress import IPv4Address, IPv6Address
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -48,14 +50,24 @@ app.add_middleware(
 app.add_middleware(ApiShieldMiddleware)
 
 
+class IpSource(str, Enum):
+    CLIENT_DECLARED = "CLIENT_DECLARED"
+    PLATFORM_EXPORT = "PLATFORM_EXPORT"
+    SERVER_OBSERVED = "SERVER_OBSERVED"
+    PROVIDER_RECORD = "PROVIDER_RECORD"
+    OTHER = "OTHER"
+
+
 class Mensaje(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     remitente_id: str = Field(min_length=1, max_length=128)
     destinatario_id: str = Field(min_length=1, max_length=128)
     contenido: str = Field(min_length=1, max_length=10_000)
-    fecha_hora: str | None = Field(default=None, max_length=64)
-    ip_origen: str | None = Field(default=None, max_length=45)
+    fecha_hora: datetime | None = None
+    ip_origen: IPv4Address | IPv6Address | None = None
+    ip_source: IpSource = IpSource.CLIENT_DECLARED
+    ip_verified: bool = False
     plataforma: str | None = Field(default=None, max_length=100)
 
     @field_validator("remitente_id", "destinatario_id", "contenido", "plataforma")
@@ -65,9 +77,7 @@ class Mensaje(BaseModel):
             raise ValueError("El campo no puede estar vacío")
         return value
 
-    @field_validator(
-        "remitente_id", "destinatario_id", "plataforma", "fecha_hora", "ip_origen"
-    )
+    @field_validator("remitente_id", "destinatario_id", "plataforma", "ip_source")
     @classmethod
     def limit_to_single_line(cls, value: str | None) -> str | None:
         if value is not None and any(
@@ -114,7 +124,9 @@ def login(
 def analizar_mensaje(
     request: Request,
     mensaje: Mensaje,
-    user: Annotated[User, Depends(require_roles(Role.ADMIN, Role.ANALYST))],
+    user: Annotated[
+        User, Depends(require_roles(Role.ADMIN, Role.ANALYST, Role.SUPERVISOR))
+    ],
 ):
     rate = REPORT_LIMITER.check(user.username)
     if not rate.allowed:
@@ -125,11 +137,11 @@ def analizar_mensaje(
         )
 
     if not mensaje.fecha_hora:
-        mensaje.fecha_hora = datetime.now(timezone.utc).isoformat()
+        mensaje.fecha_hora = datetime.now(timezone.utc)
 
     resultado_patrones = detect_patterns.evaluar_texto(mensaje.contenido)
     datos_ip = (
-        ip_analysis.analizar_ip(mensaje.ip_origen.strip()) if mensaje.ip_origen else {}
+        ip_analysis.analizar_ip(str(mensaje.ip_origen)) if mensaje.ip_origen else {}
     )
     perfil = detect_patterns.identificar_perfil(resultado_patrones)
     try:
