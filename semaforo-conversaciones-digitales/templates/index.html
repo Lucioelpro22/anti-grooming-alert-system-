@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Aprende a reconocer señales seguras, dudosas y de alerta en conversaciones digitales.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Semáforo de Conversaciones Digitales</title>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Proyecto 2 de 6 · Herramientas de Crecimiento y Protección</p>
+      <h1>🚦 Semáforo de Conversaciones Digitales</h1>
+      <p class="subtitle">Aprendo a reconocer señales, poner límites y pedir ayuda con calma.</p>
+    </div>
+    <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones">
+    <button class="tab active" data-view="semaforo">🚦 Mi semáforo</button>
+    <button class="tab" data-view="practica">💬 Practico</button>
+    <button class="tab" data-view="limites">🧭 Mis límites</button>
+    <button class="tab" data-view="salida">🛟 Plan de salida</button>
+  </nav>
+
+  <main class="container">
+    <section id="semaforo" class="view active">
+      <h2>🚦 Mi semáforo</h2>
+      <p class="lead">Una conversación puede cambiar de color. Si algo me incomoda, puedo parar aunque antes todo pareciera normal.</p>
+
+      <article class="signal green">
+        <h3>🟢 Verde — Me siento respetado/a</h3>
+        <ul>
+          <li>Respeta cuando digo “no”.</li>
+          <li>No me pide secretos, contraseñas ni fotos privadas.</li>
+          <li>No intenta alejarme de mi familia o amistades.</li>
+          <li>Puedo terminar la conversación sin presión.</li>
+        </ul>
+      </article>
+
+      <article class="signal yellow">
+        <h3>🟡 Amarillo — Algo me hace dudar</h3>
+        <ul>
+          <li>Pregunta mucho por dónde vivo, mi escuela o mis horarios.</li>
+          <li>Insiste en pasar a un chat privado o que nadie más vea.</li>
+          <li>Hace regalos o promesas para que yo haga algo.</li>
+          <li>Me hace sentir culpable por no responder.</li>
+        </ul>
+        <p><strong>Qué puedo hacer:</strong> pausar, no dar más datos y hablar con alguien de confianza.</p>
+      </article>
+
+      <article class="signal red">
+        <h3>🔴 Rojo — Necesito salir y pedir ayuda</h3>
+        <ul>
+          <li>Me pide fotos íntimas o sexuales.</li>
+          <li>Me amenaza, chantajea o dice que publicará algo.</li>
+          <li>Me pide que mantenga la relación en secreto.</li>
+          <li>Se enoja porque quiero irme o bloquear.</li>
+        </ul>
+        <p><strong>Qué puedo hacer:</strong> cortar la conversación, guardar evidencia sin compartirla y pedir ayuda.</p>
+      </article>
+    </section>
+
+    <section id="practica" class="view">
+      <h2>💬 Practico con situaciones</h2>
+      <p class="lead">No analizamos chats reales. Practicamos con ejemplos inventados para aprender.</p>
+      <article id="scenarioCard" class="card" aria-live="polite"></article>
+      <div id="scenarioBadges" class="badges"></div>
+    </section>
+
+    <section id="limites" class="view">
+      <h2>🧭 Mis límites</h2>
+      <p class="lead">Mis límites son válidos aunque otra persona no los entienda o no le gusten.</p>
+      <article class="card">
+        <h3>Yo decido que...</h3>
+        <label class="choice"><input type="checkbox" data-boundary="no_fotos"> No envío fotos privadas.</label>
+        <label class="choice"><input type="checkbox" data-boundary="no_ubicacion"> No comparto mi ubicación exacta.</label>
+        <label class="choice"><input type="checkbox" data-boundary="no_secretos"> No guardo secretos que me hagan sentir mal.</label>
+        <label class="choice"><input type="checkbox" data-boundary="puedo_salir"> Puedo dejar un chat cuando quiera.</label>
+        <label class="choice"><input type="checkbox" data-boundary="pido_ayuda"> Puedo pedir ayuda aunque me haya equivocado.</label>
+      </article>
+
+      <article class="card">
+        <h3>Frases que puedo usar</h3>
+        <div class="phrase-grid">
+          <button type="button" class="phrase">No quiero seguir hablando de esto.</button>
+          <button type="button" class="phrase">No voy a compartir eso.</button>
+          <button type="button" class="phrase">Voy a hablar con alguien de confianza.</button>
+          <button type="button" class="phrase">Me voy de este chat.</button>
+        </div>
+        <p id="phraseCopy" class="status" aria-live="polite"></p>
+      </article>
+    </section>
+
+    <section id="salida" class="view">
+      <h2>🛟 Mi plan de salida</h2>
+      <article class="card">
+        <ol class="steps">
+          <li><strong>Paro.</strong> No tengo que responder de inmediato.</li>
+          <li><strong>Salgo.</strong> Puedo cerrar, bloquear o silenciar.</li>
+          <li><strong>Guardo.</strong> Con ayuda adulta, conservo datos útiles sin reenviar contenido íntimo.</li>
+          <li><strong>Cuento.</strong> Busco una persona de confianza.</li>
+          <li><strong>Pido ayuda.</strong> Si hace falta, usamos un canal oficial.</li>
+        </ol>
+      </article>
+
+      <article class="card">
+        <h3>Mis personas de confianza</h3>
+        <p class="small">Se guardan solamente en este dispositivo.</p>
+        <form id="trustedForm" class="trusted-form">
+          <input id="trustedName" required maxlength="50" placeholder="Nombre">
+          <input id="trustedRelation" maxlength="40" placeholder="Relación">
+          <input id="trustedPhone" maxlength="30" inputmode="tel" placeholder="Teléfono">
+          <button type="submit">Agregar</button>
+        </form>
+        <ul id="trustedList" class="plain-list"></ul>
+      </article>
+
+      <article class="card">
+        <h3>Mi progreso</h3>
+        <div class="progress-shell" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText">0% completado</p>
+      </article>
+    </section>
+  </main>
+
+  <button id="exitHelp" class="help-button" type="button">🛟 Quiero salir de esta conversación</button>
+
+  <dialog id="helpDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" aria-label="Cerrar">×</button>
+      <h2>Puedes parar ahora</h2>
+      <p class="comfort">No tienes que seguir respondiendo. Pedir ayuda es una decisión segura.</p>
+      <ol>
+        <li>Cierra o pausa la conversación.</li>
+        <li>Busca a una persona de confianza.</li>
+        <li>No borres todo antes de pedir orientación.</li>
+      </ol>
+      <p class="small">La app no envía mensajes, denuncias ni datos automáticamente.</p>
+      <button id="shareHelp" type="button">Avisar a una persona adulta</button>
+      <p id="helpStatus" class="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <footer>
+    <p>Proyecto abierto · Lucioelpro22 · MIT · Sin vigilancia ni análisis de chats reales.</p>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
