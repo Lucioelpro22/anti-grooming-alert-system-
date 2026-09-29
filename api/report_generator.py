@@ -45,6 +45,21 @@ def _canonical(data: dict[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
+def _validated_report_id(raw_id: str) -> str:
+    """Return a canonical filename-safe UUID after strict validation."""
+    if not re.fullmatch(
+        r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-f]{32})",
+        raw_id,
+        flags=re.IGNORECASE,
+    ):
+        raise EvidenceSecurityError("Identificador de informe inválido")
+    try:
+        parsed = uuid.UUID(raw_id)
+    except ValueError as exc:
+        raise EvidenceSecurityError("Identificador de informe inválido") from exc
+    return parsed.hex if len(raw_id) == 32 else str(parsed)
+
+
 def _atomic_write(path: Path, data: bytes) -> None:
     temporary: str | None = None
     try:
@@ -256,14 +271,12 @@ def crear_informe(
 
 def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) -> dict:
     """Read and decrypt report, returning original message and analysis."""
-    if not re.fullmatch(
-        r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-f]{32})",
-        informe_id,
-        flags=re.IGNORECASE,
-    ):
+    try:
+        safe_id = _validated_report_id(informe_id)
+    except EvidenceSecurityError:
         return {}
-    encrypted_path = CARPETA_INFORMES / f"informe_{informe_id}.enc"
-    metadata_path = CARPETA_INFORMES / f"informe_{informe_id}.json"
+    encrypted_path = CARPETA_INFORMES / f"informe_{safe_id}.enc"
+    metadata_path = CARPETA_INFORMES / f"informe_{safe_id}.json"
     if not encrypted_path.is_file() or not metadata_path.is_file():
         return {}
     with audit_state.transaction(CARPETA_INFORMES):
@@ -351,14 +364,9 @@ def actualizar_estado_informe(
     A legal hold cannot be removed through this operation. Every transition is
     appended to the tamper-evident audit chain.
     """
-    if not re.fullmatch(
-        r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-f]{32})",
-        informe_id,
-        flags=re.IGNORECASE,
-    ):
-        raise EvidenceSecurityError("Identificador de informe inválido")
-    encrypted_path = CARPETA_INFORMES / f"informe_{informe_id}.enc"
-    metadata_path = CARPETA_INFORMES / f"informe_{informe_id}.json"
+    safe_id = _validated_report_id(informe_id)
+    encrypted_path = CARPETA_INFORMES / f"informe_{safe_id}.enc"
+    metadata_path = CARPETA_INFORMES / f"informe_{safe_id}.json"
     with audit_state.transaction(CARPETA_INFORMES):
         _read_verified_audit()
         try:
