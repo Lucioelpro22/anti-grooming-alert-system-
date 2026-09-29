@@ -4,6 +4,31 @@ Software de ciberseguridad diseñado para detectar, identificar y documentar con
 
 ---
 
+## 🌱 Serie educativa — 6 Herramientas de Crecimiento y Protección
+
+Este repositorio también contiene una serie educativa local-first pensada para acompañar a niñas, niños y adolescentes. Para evitar confusiones, la **serie original** y las **herramientas complementarias** se muestran por separado.
+
+### Serie original
+
+| Nº | Proyecto original | Estado |
+|---:|---|---|
+| 1 | 📱 [Cuaderno de Seguridad Digital para Chicos](cuaderno-seguridad-digital/) | ✅ Implementado |
+| 2 | 🧠 Organizador de Emociones | ⏳ Pendiente |
+| 3 | 🌱 Mi Rincón de Metas y Crecimiento | ⏳ Pendiente |
+| 4 | 🛡️ Mi Espacio Seguro | ⏳ Pendiente |
+| 5 | 📖 [Libro de Recuerdos y Sueños](libro-recuerdos-suenos/) | ✅ Implementado |
+| 6 | 🤝 [Mi Primera Comunidad de Ayuda](primera-comunidad-ayuda/) | ✅ Implementado |
+
+### Herramientas complementarias ya desarrolladas
+
+Estas aplicaciones **no reemplazan** a los Proyectos 2, 3 y 4 originales; quedan visibles como módulos extra de seguridad digital:
+
+- 🚦 [Semáforo de Conversaciones Digitales](semaforo-conversaciones-digitales/)
+- 🛡️ [Escudo de Privacidad Digital](escudo-privacidad-digital/)
+- 👣 [Laboratorio de Huella Digital](laboratorio-huella-digital/)
+
+➡️ [Ver el mapa completo de la serie y los proyectos complementarios](SERIE_6_HERRAMIENTAS.md)
+
 ## 🎯 Funcionalidades
 - ✅ Detección de patrones de riesgo en lenguaje y comportamiento
 - ✅ Análisis de direcciones IP y datos de conexión
