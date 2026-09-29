@@ -1,0 +1,11 @@
+{
+  "name":"Mi Cuaderno de Seguridad Digital",
+  "short_name":"Cuaderno Seguro",
+  "lang":"es-AR",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#f7f7fb",
+  "theme_color":"#4f46e5",
+  "description":"Cuaderno educativo y local-first de seguridad digital.",
+  "icons":[{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

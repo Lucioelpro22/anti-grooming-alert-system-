@@ -1,0 +1,42 @@
+name: Cuaderno Seguridad Digital
+
+on:
+  push:
+    paths:
+      - "cuaderno-seguridad-digital/**"
+      - ".github/workflows/cuaderno-seguridad.yml"
+  pull_request:
+    paths:
+      - "cuaderno-seguridad-digital/**"
+      - ".github/workflows/cuaderno-seguridad.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cuaderno-seguridad-digital
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: cuaderno-seguridad-digital/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt ruff
+      - run: ruff check api tests
+      - run: pytest -q
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
