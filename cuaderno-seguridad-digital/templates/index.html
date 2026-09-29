@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="Cuaderno interactivo para aprender a cuidarse en entornos digitales.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Mi Cuaderno de Seguridad Digital</title>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Proyecto 1 de 6 · Herramientas de Crecimiento y Protección</p>
+      <h1>Mi Cuaderno de Seguridad Digital</h1>
+      <p class="subtitle">Aprendo a cuidarme, pedir ayuda y tomar decisiones con calma.</p>
+    </div>
+    <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones principales">
+    <button data-view="cuaderno" class="tab active">📘 Mi cuaderno</button>
+    <button data-view="juego" class="tab">🎮 Aprendo jugando</button>
+    <button data-view="espacio" class="tab">📱 Mi espacio</button>
+  </nav>
+
+  <main id="main" class="container">
+    <section id="cuaderno" class="view active" aria-labelledby="cuaderno-title">
+      <h2 id="cuaderno-title">📘 Mi cuaderno</h2>
+      <p class="lead">Yo cuido mis datos y puedo pedir ayuda cuando algo me incomoda.</p>
+
+      <article class="card lesson">
+        <h3>🔐 Lo que NO comparto</h3>
+        <p>No comparto mi dirección, escuela, contraseñas, ubicación exacta ni fotos privadas con personas que no conozco bien.</p>
+        <label class="learned"><input type="checkbox" data-progress="datos"> Lo entendí y puedo explicarlo.</label>
+        <label>Lo que aprendí<textarea data-note="datos" rows="3" placeholder="Escribe una idea con tus palabras..."></textarea></label>
+      </article>
+
+      <article class="card lesson">
+        <h3>✅ Mis reglas claras</h3>
+        <p>Pido permiso antes de publicar fotos de otras personas. Si algo me da miedo, vergüenza o incomodidad, lo cuento a un adulto de confianza.</p>
+        <label class="learned"><input type="checkbox" data-progress="reglas"> Lo entendí y puedo explicarlo.</label>
+        <label>Lo que aprendí<textarea data-note="reglas" rows="3"></textarea></label>
+      </article>
+
+      <article class="card lesson">
+        <h3>🤝 Personas de confianza</h3>
+        <p>Puedo elegir personas que me escuchan y me ayudan sin juzgarme.</p>
+        <form id="trustedForm" class="grid-form">
+          <input id="trustedName" required maxlength="50" placeholder="Nombre">
+          <input id="trustedPhone" maxlength="30" inputmode="tel" placeholder="Teléfono">
+          <input id="trustedRelation" maxlength="40" placeholder="Relación (mamá, profe...)">
+          <button type="submit">Agregar</button>
+        </form>
+        <ul id="trustedList" class="plain-list"></ul>
+        <label class="learned"><input type="checkbox" data-progress="confianza"> Ya elegí al menos una persona de confianza.</label>
+      </article>
+
+      <article class="card lesson">
+        <h3>☎️ Líneas de ayuda en Argentina</h3>
+        <p><strong>Línea 102:</strong> orientación y escucha para niñas, niños y adolescentes.</p>
+        <p>Si existe un peligro inmediato, busca a una persona adulta cercana y utiliza los servicios de emergencia de tu localidad.</p>
+        <p>Para denuncias o asesoramiento digital, utiliza canales oficiales del Estado, policía/fiscalía competente o del organismo local de niñez. Verifica siempre el canal oficial antes de enviar información.</p>
+        <label class="learned"><input type="checkbox" data-progress="ayuda"> Sé dónde pedir ayuda.</label>
+      </article>
+    </section>
+
+    <section id="juego" class="view" aria-labelledby="juego-title">
+      <h2 id="juego-title">🎮 Aprendo jugando</h2>
+      <p class="lead">No hay puntajes ni castigos. Practicamos decisiones seguras.</p>
+      <div id="quizCard" class="card"></div>
+      <div id="badges" class="badges" aria-live="polite"></div>
+    </section>
+
+    <section id="espacio" class="view" aria-labelledby="espacio-title">
+      <h2 id="espacio-title">📱 Mi espacio</h2>
+      <article class="card">
+        <div class="avatar-preview" id="avatarPreview" aria-hidden="true">🙂</div>
+        <label>Mi nombre o apodo<input id="profileName" maxlength="30" placeholder="Cómo quieres que te llamen"></label>
+        <label>Mi color favorito<input id="profileColor" type="color" value="#4f46e5"></label>
+        <label>Mi avatar
+          <select id="profileAvatar">
+            <option>🙂</option><option>🦊</option><option>🐼</option><option>🐳</option><option>🌈</option><option>🚀</option>
+          </select>
+        </label>
+      </article>
+
+      <article class="card">
+        <h3>Mi progreso</h3>
+        <div class="progress-shell" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso del cuaderno">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText">0% completado</p>
+      </article>
+
+      <article class="card">
+        <h3>🔒 PIN de 4 dígitos</h3>
+        <p class="small">Sirve para evitar aperturas accidentales en este dispositivo. No reemplaza el bloqueo del teléfono ni cifra tus datos.</p>
+        <div class="pin-row">
+          <input id="pinInput" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" placeholder="••••" aria-label="PIN de 4 dígitos">
+          <button id="savePin" type="button">Guardar PIN</button>
+          <button id="lockNow" class="secondary" type="button">Bloquear ahora</button>
+        </div>
+      </article>
+
+      <article class="card danger-zone">
+        <h3>Reiniciar cuaderno</h3>
+        <p>Borra solamente los datos guardados por esta app en este dispositivo.</p>
+        <button id="resetAll" class="danger" type="button">Borrar mis datos y empezar de cero</button>
+      </article>
+    </section>
+  </main>
+
+  <button id="helpButton" class="help-button" type="button">🛡️ No me siento bien / Necesito ayuda</button>
+
+  <dialog id="helpDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" aria-label="Cerrar">×</button>
+      <h2>Está bien pedir ayuda</h2>
+      <p class="comfort">Está bien. No hiciste nada malo. No estás solo/a.</p>
+      <ol>
+        <li>Habla con alguien de confianza.</li>
+        <li>No borres mensajes, capturas o datos de lo que pasó.</li>
+        <li>Pide ayuda para decidir el siguiente paso.</li>
+      </ol>
+      <p class="small">La app no hace una denuncia automática ni envía tus datos por sí sola.</p>
+      <button id="shareHelp" type="button">Enviar aviso a una persona adulta</button>
+      <p id="helpSaved" class="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <dialog id="pinDialog">
+    <form id="unlockForm" class="dialog-card">
+      <h2>Desbloquear mi espacio</h2>
+      <p>Ingresa tu PIN de 4 dígitos.</p>
+      <input id="unlockPin" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="off">
+      <button type="submit">Entrar</button>
+      <p id="pinError" class="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+
+  <footer>
+    <p>Hecho con cuidado por Lucioelpro22 · Código abierto MIT · Datos locales primero.</p>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
