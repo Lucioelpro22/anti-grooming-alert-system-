@@ -1,0 +1,11 @@
+{
+  "name":"Escudo de Privacidad Digital",
+  "short_name":"Escudo Digital",
+  "lang":"es-AR",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#f8fafc",
+  "theme_color":"#0f766e",
+  "description":"Herramienta educativa para proteger datos, cuentas, dispositivos y permisos.",
+  "icons":[{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
