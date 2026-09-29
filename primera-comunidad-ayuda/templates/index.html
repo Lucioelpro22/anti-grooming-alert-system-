@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#15803d">
+  <meta name="description" content="Tablero local de buenas acciones, gratitud y desafíos solidarios para niñas, niños y adolescentes.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Mi Primera Comunidad de Ayuda</title>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Proyecto 6 de 6 · Herramientas de Crecimiento y Protección</p>
+      <h1>🤝 Mi Primera Comunidad de Ayuda</h1>
+      <p class="subtitle">Ayudar también se aprende: con respeto, sin competir y cuidando mis propios límites.</p>
+    </div>
+    <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones principales">
+    <button class="tab active" data-view="acciones">💚 Buenas acciones</button>
+    <button class="tab" data-view="desafios">🌱 Desafíos</button>
+    <button class="tab" data-view="gratitud">🌟 Gratitud</button>
+    <button class="tab" data-view="limites">🧭 Ayudar con límites</button>
+    <button class="tab" data-view="resumen">📘 Mi recorrido</button>
+  </nav>
+
+  <main class="container">
+    <section id="acciones" class="view active">
+      <h2>💚 Mis buenas acciones</h2>
+      <p class="lead">Registro gestos que hice porque quise ayudar, no para ganar puntos ni competir con nadie.</p>
+      <article class="card">
+        <form id="actionForm" class="stack">
+          <label>¿Qué hice?
+            <input id="actionText" maxlength="180" required placeholder="Ayudé a ordenar los materiales...">
+          </label>
+          <label>¿A quién o a qué ayudó?
+            <select id="actionFor">
+              <option>A una persona</option>
+              <option>A mi familia</option>
+              <option>A mi escuela</option>
+              <option>A mi barrio</option>
+              <option>A un animal</option>
+              <option>Al ambiente</option>
+              <option>A un grupo</option>
+            </select>
+          </label>
+          <label>¿Cómo me hizo sentir?
+            <select id="actionFeeling">
+              <option>😊 Bien</option>
+              <option>🌱 Aprendí algo</option>
+              <option>💪 Me costó pero pude</option>
+              <option>🤔 Me dejó pensando</option>
+              <option>😌 En calma</option>
+            </select>
+          </label>
+          <button type="submit">Guardar acción</button>
+        </form>
+      </article>
+      <div id="actionList" class="timeline"></div>
+    </section>
+
+    <section id="desafios" class="view">
+      <h2>🌱 Desafíos solidarios</h2>
+      <p class="lead">Pequeños desafíos, sin presión. Puedo elegir uno, adaptarlo o simplemente inspirarme.</p>
+      <div id="challengeList" class="challenge-grid"></div>
+      <article class="card">
+        <h3>Crear mi propio desafío</h3>
+        <form id="customChallengeForm" class="stack">
+          <label>Mi idea
+            <input id="customChallengeText" maxlength="160" required placeholder="Esta semana quiero...">
+          </label>
+          <button type="submit">Agregar desafío</button>
+        </form>
+      </article>
+    </section>
+
+    <section id="gratitud" class="view">
+      <h2>🌟 Mi frasco de gratitud</h2>
+      <p class="lead">También puedo reconocer la ayuda que recibo.</p>
+      <article class="card">
+        <form id="gratitudeForm" class="stack">
+          <label>Hoy agradezco...
+            <textarea id="gratitudeText" maxlength="500" rows="4" required placeholder="Agradezco que alguien me escuchó..."></textarea>
+          </label>
+          <button type="submit">Guardar gratitud</button>
+        </form>
+      </article>
+      <div id="gratitudeJar" class="gratitude-grid"></div>
+    </section>
+
+    <section id="limites" class="view">
+      <h2>🧭 Ayudar con límites</h2>
+      <p class="lead">Ser solidario no significa hacer cualquier cosa, guardar secretos peligrosos ni olvidarme de mí.</p>
+
+      <article class="card">
+        <h3>Mis reglas para ayudar</h3>
+        <label class="choice"><input type="checkbox" data-boundary="safe"> Puedo ayudar sin ponerme en peligro.</label>
+        <label class="choice"><input type="checkbox" data-boundary="adult"> Si algo es serio, busco a una persona adulta de confianza.</label>
+        <label class="choice"><input type="checkbox" data-boundary="secret"> No prometo guardar secretos que puedan hacer daño.</label>
+        <label class="choice"><input type="checkbox" data-boundary="money"> No tengo que dar dinero, contraseñas ni datos personales para demostrar que soy buena persona.</label>
+        <label class="choice"><input type="checkbox" data-boundary="no"> Puedo decir “no” si algo me incomoda.</label>
+        <label class="choice"><input type="checkbox" data-boundary="rest"> También necesito descansar y recibir ayuda.</label>
+      </article>
+
+      <article id="boundaryScenario" class="card" aria-live="polite"></article>
+      <div id="boundaryBadges" class="badges"></div>
+    </section>
+
+    <section id="resumen" class="view">
+      <h2>📘 Mi recorrido</h2>
+      <article class="card">
+        <h3>Lo que fui construyendo</h3>
+        <div id="stats" class="stats"></div>
+      </article>
+
+      <article class="card">
+        <h3>Mi progreso</h3>
+        <div class="progress-shell" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText">0% completado</p>
+      </article>
+
+      <article class="card">
+        <h3>Mi frase de comunidad</h3>
+        <form id="mottoForm" class="stack">
+          <label>Quiero recordar que...
+            <input id="mottoText" maxlength="140" placeholder="Ayudar también es escuchar y respetar.">
+          </label>
+          <button type="submit">Guardar frase</button>
+        </form>
+        <blockquote id="mottoPreview" class="motto">“Cada gesto cuenta.”</blockquote>
+      </article>
+
+      <article class="card danger-zone">
+        <h3>Empezar de nuevo</h3>
+        <p>Borra solamente los datos locales de este proyecto.</p>
+        <button id="resetAll" class="danger" type="button">Borrar mi recorrido local</button>
+      </article>
+    </section>
+  </main>
+
+  <button id="helpButton" class="help-button" type="button">🫶 Quiero ayudar pero no sé cómo</button>
+
+  <dialog id="helpDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" aria-label="Cerrar">×</button>
+      <h2>Ayudar también puede ser pedir ayuda</h2>
+      <p class="comfort">No tienes que resolver problemas grandes solo/a.</p>
+      <ol>
+        <li>Escucha sin prometer cosas que no puedes cumplir.</li>
+        <li>Si alguien corre peligro, busca a una persona adulta de confianza.</li>
+        <li>No compartas fotos, secretos, contraseñas ni datos privados para “ayudar”.</li>
+        <li>Si algo te supera, retirarte y pedir apoyo también es responsable.</li>
+      </ol>
+      <p class="small">Esta app no contacta personas, instituciones ni servicios automáticamente.</p>
+    </form>
+  </dialog>
+
+  <footer>
+    <p>Proyecto abierto · Lucioelpro22 · MIT · Sin rankings, perfiles públicos, chat ni ubicación.</p>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
