@@ -1,5 +1,5 @@
-const STORAGE_KEY="semaforoConversaciones.v1";
-const state=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+const LOCAL_STATE_NAME="semaforo-v1";
+const state=JSON.parse(localStorage.getItem(LOCAL_STATE_NAME)||"{}");
 state.boundaries=state.boundaries||{};
 state.trusted=state.trusted||[];
 state.scenario=state.scenario||{index:0,completed:false};
@@ -7,7 +7,7 @@ state.helpLog=state.helpLog||[];
 
 const qs=s=>document.querySelector(s);
 const qsa=s=>[...document.querySelectorAll(s)];
-const save=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+const save=()=>localStorage.setItem(LOCAL_STATE_NAME,JSON.stringify(state));
 
 qsa(".tab").forEach(btn=>btn.addEventListener("click",()=>{
   qsa(".tab,.view").forEach(el=>el.classList.remove("active"));
