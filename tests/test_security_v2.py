@@ -7,6 +7,7 @@ from api.detect_patterns import evaluar_texto, identificar_perfil
 from api.ip_analysis import analizar_ip
 from api.key_management import current_key
 from api.pseudonymization import pseudonymize
+from api.rate_limit_backend import RedisRateLimitBackend
 from api.report_generator import leer_informe
 from api.retention import EvidenceStatus, can_transition, retention_deadline
 
@@ -85,3 +86,24 @@ def test_legal_hold_cannot_be_deleted():
     )
     created = datetime(2026, 1, 1, tzinfo=timezone.utc)
     assert retention_deadline(created, 30).day == 31
+
+
+def test_redis_rate_limit_backend_uses_atomic_pipeline():
+    class Pipeline:
+        def incr(self, key):
+            self.key = key
+
+        def expire(self, key, seconds):
+            self.seconds = seconds
+
+        def execute(self):
+            return (2, True)
+
+    class Client:
+        def pipeline(self, transaction=True):
+            assert transaction is True
+            return Pipeline()
+
+    result = RedisRateLimitBackend(Client()).check("user", 1, 60)
+    assert not result.allowed
+    assert result.retry_after == 60

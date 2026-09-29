@@ -23,6 +23,8 @@ dependencias, tests y GitHub Actions sobre `main` antes de esta rama.
   de informes históricos.
 - Se definieron estados de retención y la regla de que `LEGAL_HOLD` no puede
   pasar a eliminación.
+- Se agregó una interfaz de backend Redis para despliegues multi-worker; el
+  backend solo se activa cuando la infraestructura lo provee explícitamente.
 
 ## Verificación
 
