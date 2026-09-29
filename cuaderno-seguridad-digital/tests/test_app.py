@@ -1,8 +1,17 @@
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-from api.main import app
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+MAIN_PATH = PROJECT_DIR / "api" / "main.py"
 
-client = TestClient(app)
+spec = spec_from_file_location("cuaderno_seguridad_api_main", MAIN_PATH)
+assert spec is not None and spec.loader is not None
+module = module_from_spec(spec)
+spec.loader.exec_module(module)
+
+client = TestClient(module.app)
 
 
 def test_health():
