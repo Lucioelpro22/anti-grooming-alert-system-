@@ -9,14 +9,20 @@ Carpeta: [`cuaderno-seguridad-digital/`](cuaderno-seguridad-digital/)
 
 Aprendizaje de reglas de protección, datos que no conviene compartir, personas de confianza y situaciones prácticas.
 
-### 2. 🧠 Organizador de Emociones — ⏳ Pendiente
-Idea original: registrar emociones, escribir brevemente qué pasó, visualizar el mes, recibir frases de apoyo y compartir voluntariamente con una persona de confianza.
+### 2. 🧠 Organizador de Emociones — ✅ Implementado
+Carpeta: [`organizador-emociones/`](organizador-emociones/)
 
-### 3. 🌱 Mi Rincón de Metas y Crecimiento — ⏳ Pendiente
-Idea original: metas diarias/semanales, progreso visual, logros personales y recompensas acordadas en familia.
+Registro de emociones, intensidad subjetiva, notas opcionales, vista mensual en colores, recursos personales y compartir voluntario.
 
-### 4. 🛡️ Mi Espacio Seguro — ⏳ Pendiente
-Idea original: botón “No me siento bien”, registro protegido de lo ocurrido, guía paso a paso y aviso voluntario a una persona responsable.
+### 3. 🌱 Mi Rincón de Metas y Crecimiento — ✅ Implementado
+Carpeta: [`rincon-metas-crecimiento/`](rincon-metas-crecimiento/)
+
+Metas diarias/semanales, progreso por pasos, logros personales, acuerdos de celebración y reflexiones sin rankings ni rachas obligatorias.
+
+### 4. 🛡️ Mi Espacio Seguro — ✅ Implementado
+Carpeta: [`mi-espacio-seguro/`](mi-espacio-seguro/)
+
+Botón “No me siento bien”, guía de calma, registros cifrados, persona de confianza, aviso voluntario y respaldo cifrado local.
 
 ### 5. 📖 Libro de Recuerdos y Sueños — ✅ Implementado
 Carpeta: [`libro-recuerdos-suenos/`](libro-recuerdos-suenos/)
@@ -53,8 +59,8 @@ Práctica sobre publicaciones, consentimiento, audiencia y huella digital.
 
 ## Estado resumido
 
-- **Serie original:** 3 de 6 proyectos implementados.
+- **Serie original:** 6 de 6 proyectos implementados. ✅
 - **Herramientas complementarias:** 3 implementadas.
-- **Total de aplicaciones educativas actualmente disponibles:** 6.
+- **Total de aplicaciones educativas actualmente disponibles:** 9.
 
-Los tres proyectos originales pendientes son **Organizador de Emociones**, **Mi Rincón de Metas y Crecimiento** y **Mi Espacio Seguro**.
+La serie original está completa; no quedan proyectos pendientes.
