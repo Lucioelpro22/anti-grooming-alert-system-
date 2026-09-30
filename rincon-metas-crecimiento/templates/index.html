@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#65a30d">
+  <meta name="description" content="Metas, logros y crecimiento personal sin presión ni castigos.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Mi Rincón de Metas y Crecimiento</title>
+</head>
+<body>
+<header class="hero">
+  <div>
+    <p class="eyebrow">Proyecto 3 de 6 · Herramientas de Crecimiento y Protección</p>
+    <h1>🌱 Mi Rincón de Metas y Crecimiento</h1>
+    <p class="subtitle">Crecer no es hacerlo perfecto: es aprender, intentar y reconocer mi propio avance.</p>
+  </div>
+  <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+</header>
+
+<nav class="tabs" aria-label="Secciones">
+  <button class="tab active" data-view="metas">🎯 Mis metas</button>
+  <button class="tab" data-view="logros">⭐ Mis logros</button>
+  <button class="tab" data-view="recompensas">🎁 Celebramos</button>
+  <button class="tab" data-view="reflexion">🌿 Mi crecimiento</button>
+</nav>
+
+<main class="container">
+<section id="metas" class="view active">
+  <h2>🎯 Mis metas</h2>
+  <p class="lead">Puedo empezar pequeño. No hay rachas obligatorias ni castigos por un día difícil.</p>
+  <article class="card">
+    <form id="goalForm" class="stack">
+      <label>Quiero lograr...
+        <input id="goalTitle" maxlength="120" required placeholder="Leer 10 minutos...">
+      </label>
+      <label>Área
+        <select id="goalCategory">
+          <option>📚 Aprender</option><option>🏃 Movimiento</option><option>🎨 Crear</option>
+          <option>🤝 Ayudar</option><option>🧹 Responsabilidad</option><option>🌿 Bienestar</option><option>Otro</option>
+        </select>
+      </label>
+      <label>Tipo
+        <select id="goalPeriod"><option>Hoy</option><option>Esta semana</option><option>Sin fecha</option></select>
+      </label>
+      <label>Pasos que quiero completar
+        <input id="goalTarget" type="number" min="1" max="20" value="5" required>
+      </label>
+      <button type="submit">Crear meta</button>
+    </form>
+  </article>
+  <div id="goalList" class="goal-grid"></div>
+</section>
+
+<section id="logros" class="view">
+  <h2>⭐ Mis logros</h2>
+  <p class="lead">También cuentan el esfuerzo, la paciencia y volver a intentar.</p>
+  <article class="card">
+    <form id="achievementForm" class="stack">
+      <label>Hoy quiero recordar que...
+        <input id="achievementText" maxlength="180" required placeholder="Me esforcé aunque me costó...">
+      </label>
+      <label>Tipo de logro
+        <select id="achievementType">
+          <option>💪 Me esforcé</option><option>🤝 Ayudé a alguien</option><option>🧠 Aprendí algo</option>
+          <option>🌈 Me animé</option><option>🧘 Me cuidé</option><option>✨ Otro logro</option>
+        </select>
+      </label>
+      <button type="submit">Guardar logro</button>
+    </form>
+  </article>
+  <div id="achievementList" class="timeline"></div>
+</section>
+
+<section id="recompensas" class="view">
+  <h2>🎁 Celebramos juntos</h2>
+  <p class="lead">Una recompensa puede ser tiempo compartido, elegir una actividad o simplemente reconocer el esfuerzo.</p>
+  <article class="card">
+    <form id="rewardForm" class="stack">
+      <label>Cuando logre...
+        <input id="rewardGoal" maxlength="120" required placeholder="Terminar una meta importante">
+      </label>
+      <label>Podemos celebrar con...
+        <input id="rewardText" maxlength="160" required placeholder="Elegir una película juntos">
+      </label>
+      <button type="submit">Guardar acuerdo</button>
+    </form>
+  </article>
+  <div id="rewardList" class="timeline"></div>
+</section>
+
+<section id="reflexion" class="view">
+  <h2>🌿 Mi crecimiento</h2>
+  <article class="card">
+    <h3>Resumen personal</h3>
+    <div id="stats" class="stats"></div>
+  </article>
+  <article class="card">
+    <h3>Una reflexión</h3>
+    <label class="field">Algo que aprendí sobre mí
+      <textarea id="reflectionText" maxlength="600" rows="5" placeholder="Descubrí que..."></textarea>
+    </label>
+    <button id="saveReflection" type="button">Guardar reflexión</button>
+    <p id="reflectionStatus" class="status"></p>
+  </article>
+  <article class="card">
+    <h3>Mi color</h3>
+    <input id="favoriteColor" type="color" value="#65a30d">
+    <p class="small">Personaliza el color principal de este rincón.</p>
+  </article>
+  <article class="card danger-zone">
+    <button id="resetAll" class="danger" type="button">Borrar mi progreso local</button>
+  </article>
+</section>
+</main>
+
+<footer><p>Lucioelpro22 · MIT · Local-first · Sin rachas obligatorias, rankings ni publicidad.</p></footer>
+<script src="/static/app.js" defer></script>
+</body>
+</html>
