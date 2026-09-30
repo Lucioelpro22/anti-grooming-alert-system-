@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="Espacio privado de calma, registro protegido y pedido voluntario de ayuda.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Mi Espacio Seguro</title>
+</head>
+<body>
+<header class="hero">
+  <div>
+    <p class="eyebrow">Proyecto 4 de 6 · Herramientas de Crecimiento y Protección</p>
+    <h1>🛡️ Mi Espacio Seguro</h1>
+    <p class="subtitle">Un lugar para parar, ordenar lo que pasó y pedir ayuda cuando la necesito.</p>
+  </div>
+  <div class="hero-actions">
+    <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+    <button id="lockBtn" class="secondary hidden" type="button">🔒 Cerrar espacio</button>
+  </div>
+</header>
+
+<button id="calmButton" class="calm-button" type="button">🫶 No me siento bien</button>
+
+<main class="container">
+  <section id="gate" class="card gate">
+    <div id="setupPanel" class="hidden">
+      <h2>Crear mi espacio privado</h2>
+      <p>Crea una contraseña exclusiva para proteger tus registros y tu contacto de confianza.</p>
+      <form id="setupForm" class="stack">
+        <label>Contraseña
+          <input id="setupPassword" type="password" minlength="8" autocomplete="new-password" required>
+        </label>
+        <label>Repetir contraseña
+          <input id="setupAgain" type="password" minlength="8" autocomplete="new-password" required>
+        </label>
+        <button type="submit">Crear espacio</button>
+      </form>
+      <p class="warning">No reutilices la contraseña de correo, juegos o redes. Si la pierdes, los registros cifrados no pueden recuperarse.</p>
+    </div>
+
+    <div id="unlockPanel" class="hidden">
+      <h2>🔐 Abrir mi espacio</h2>
+      <form id="unlockForm" class="stack">
+        <label>Contraseña
+          <input id="unlockPassword" type="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit">Abrir</button>
+      </form>
+      <p id="unlockStatus" class="status"></p>
+    </div>
+  </section>
+
+  <div id="safeApp" class="hidden">
+    <nav class="tabs">
+      <button class="tab active" data-view="registrar">📝 Guardar lo que pasó</button>
+      <button class="tab" data-view="confianza">🤝 Persona de confianza</button>
+      <button class="tab" data-view="registros">📚 Mis registros</button>
+      <button class="tab" data-view="respaldo">💾 Respaldo</button>
+    </nav>
+
+    <section id="registrar" class="view active">
+      <h2>📝 Guardar lo que pasó</h2>
+      <p class="lead">Es opcional. Podés escribir solo lo necesario. El contenido queda cifrado en este dispositivo.</p>
+      <article class="card">
+        <form id="incidentForm" class="stack">
+          <label>Tipo de situación
+            <select id="incidentType">
+              <option>Algo me incomodó</option>
+              <option>Alguien insistió demasiado</option>
+              <option>Me pidieron guardar un secreto</option>
+              <option>Me pidieron fotos o datos</option>
+              <option>Me amenazaron o presionaron</option>
+              <option>Otra situación</option>
+            </select>
+          </label>
+          <label>¿Qué quiero recordar?
+            <textarea id="incidentNote" maxlength="4000" rows="6" placeholder="Puedo escribir nombres de usuario, qué pasó o qué necesito contar..."></textarea>
+          </label>
+          <label><input id="incidentEvidence" type="checkbox"> Hay mensajes, capturas u otra información que quiero revisar con una persona adulta.</label>
+          <button type="submit">Guardar registro cifrado</button>
+        </form>
+        <p id="incidentStatus" class="status"></p>
+      </article>
+      <article class="card">
+        <h3>Importante</h3>
+        <p>Si hay mensajes útiles para explicar lo ocurrido, evitá borrarlos hasta hablar con una persona adulta de confianza. No reenvíes contenido íntimo para “probar” lo ocurrido.</p>
+      </article>
+    </section>
+
+    <section id="confianza" class="view">
+      <h2>🤝 Persona de confianza</h2>
+      <article class="card">
+        <form id="trustedForm" class="stack">
+          <label>Nombre o apodo
+            <input id="trustedName" maxlength="60" placeholder="Mamá, papá, tía, profe...">
+          </label>
+          <label>Teléfono (opcional)
+            <input id="trustedPhone" maxlength="30" inputmode="tel" placeholder="+54...">
+          </label>
+          <label>Relación
+            <input id="trustedRelation" maxlength="60" placeholder="Persona adulta de confianza">
+          </label>
+          <button type="submit">Guardar cifrado</button>
+        </form>
+      </article>
+      <article class="card">
+        <h3>Pedir compañía</h3>
+        <p id="trustedPreview">Todavía no guardaste una persona de confianza.</p>
+        <button id="shareHelp" type="button">Avisar que necesito hablar</button>
+        <p class="small">El aviso solo se prepara cuando tocás este botón. Nunca se envía automáticamente.</p>
+      </article>
+    </section>
+
+    <section id="registros" class="view">
+      <h2>📚 Mis registros protegidos</h2>
+      <div id="incidentList" class="timeline"></div>
+    </section>
+
+    <section id="respaldo" class="view">
+      <h2>💾 Respaldo cifrado</h2>
+      <article class="card">
+        <p>Podés descargar un archivo que sigue cifrado y necesita la misma contraseña.</p>
+        <button id="exportBackup" type="button">Descargar respaldo cifrado</button>
+      </article>
+      <article class="card danger-zone">
+        <button id="resetAll" class="danger" type="button">Borrar este espacio del dispositivo</button>
+      </article>
+    </section>
+  </div>
+</main>
+
+<dialog id="calmDialog">
+  <form method="dialog" class="dialog-card">
+    <button class="dialog-close" aria-label="Cerrar">×</button>
+    <h2>Estoy acá con vos</h2>
+    <p class="comfort">Podés parar ahora. No tenés que seguir respondiendo ni resolver esto solo/a.</p>
+    <ol>
+      <li>Alejate un momento de la conversación o situación si podés hacerlo con seguridad.</li>
+      <li>Buscá a una persona adulta de confianza.</li>
+      <li>No borres información útil antes de pedir orientación.</li>
+      <li>Si hay peligro inmediato, buscá ayuda presencial o de emergencia de tu zona.</li>
+    </ol>
+    <p class="small">Usar este botón no envía denuncias ni mensajes automáticamente.</p>
+  </form>
+</dialog>
+
+<footer><p>Lucioelpro22 · MIT · Cifrado local · Sin reportes automáticos, ubicación ni seguimiento.</p></footer>
+<script src="/static/app.js" defer></script>
+</body>
+</html>
