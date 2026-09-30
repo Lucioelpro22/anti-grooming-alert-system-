@@ -16,12 +16,14 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
+from api.key_management import current_key
 from api.report_generator import _decode_key
 
 
 class Role(str, Enum):
     ADMIN = "admin"
     ANALYST = "analyst"
+    SUPERVISOR = "supervisor"
     AUDITOR = "auditor"
 
 
@@ -118,7 +120,7 @@ def load_users() -> dict[str, StoredUser]:
 
 
 def validate_encryption_keys() -> None:
-    evidence_key = _decode_key("EVIDENCE_ENCRYPTION_KEY")
+    _, evidence_key = current_key()
     audit_key = _decode_key("AUDIT_HMAC_KEY")
     if evidence_key == audit_key:
         raise RuntimeError("Las claves de cifrado y auditoría deben ser distintas")
@@ -218,6 +220,12 @@ class LoginRateLimiter:
         key = self._key(request, username)
         cutoff = time.monotonic() - self.window_seconds
         with self._lock:
+            if len(self._failures) > 10_000 and key not in self._failures:
+                self._failures = {
+                    name: values
+                    for name, values in self._failures.items()
+                    if values and values[-1] > cutoff
+                }
             recent = [value for value in self._failures.get(key, []) if value > cutoff]
             self._failures[key] = recent
             if len(recent) >= self.attempts:

@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 from starlette.types import Message, Receive, Scope, Send
 
+from api.rate_limit_backend import RedisRateLimitBackend
+
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
 
@@ -46,16 +48,53 @@ class RateLimitResult:
 
 
 class SlidingWindowRateLimiter:
-    def __init__(self, attempts: int = 120, window_seconds: int = 60) -> None:
+    def __init__(
+        self, attempts: int = 120, window_seconds: int = 60, max_keys: int = 10_000
+    ) -> None:
         self.attempts = attempts
         self.window_seconds = window_seconds
+        self.max_keys = max_keys
         self._requests: dict[str, list[float]] = {}
         self._lock = threading.Lock()
+        self._distributed_backend: RedisRateLimitBackend | None = None
+
+    def _redis_backend(self) -> RedisRateLimitBackend | None:
+        if os.getenv("RATE_LIMIT_BACKEND", "memory").lower() != "redis":
+            return None
+        if self._distributed_backend is None:
+            url = os.getenv("REDIS_URL")
+            if not url:
+                return None
+            try:
+                import redis  # type: ignore[import-not-found]
+
+                client = redis.Redis.from_url(url, decode_responses=True)
+                self._distributed_backend = RedisRateLimitBackend(client)
+            except (ImportError, ValueError):
+                return None
+        return self._distributed_backend
 
     def check(self, key: str) -> RateLimitResult:
+        backend = self._redis_backend()
+        if backend is not None:
+            try:
+                result = backend.check(key, self.attempts, self.window_seconds)
+                return RateLimitResult(result.allowed, result.retry_after)
+            except Exception:  # noqa: BLE001
+                return RateLimitResult(False, self.window_seconds)
         now = time.monotonic()
         cutoff = now - self.window_seconds
         with self._lock:
+            if len(self._requests) >= self.max_keys and key not in self._requests:
+                stale = [
+                    name
+                    for name, values in self._requests.items()
+                    if not values or values[-1] <= cutoff
+                ]
+                for name in stale[: max(1, len(stale) // 2)]:
+                    self._requests.pop(name, None)
+                if len(self._requests) >= self.max_keys:
+                    return RateLimitResult(False, self.window_seconds)
             recent = [value for value in self._requests.get(key, []) if value > cutoff]
             if len(recent) >= self.attempts:
                 retry_after = max(1, int(self.window_seconds - (now - recent[0])))

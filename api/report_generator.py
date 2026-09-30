@@ -17,6 +17,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from api import audit_state
 from api.audit_state import EvidenceSecurityError
 from api.detect_patterns import RiskAnalysis
+from api.key_management import current_key, key_for
+from api.pseudonymization import pseudonymize
+from api.retention import EvidenceStatus, can_transition
 
 CARPETA_INFORMES = Path("informes_generados")
 AUDIT_FILENAME = "audit.jsonl"
@@ -40,6 +43,21 @@ def _canonical(data: dict[str, Any]) -> bytes:
     return json.dumps(
         data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
+
+
+def _validated_report_id(raw_id: str) -> str:
+    """Return a canonical filename-safe UUID after strict validation."""
+    if not re.fullmatch(
+        r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-f]{32})",
+        raw_id,
+        flags=re.IGNORECASE,
+    ):
+        raise EvidenceSecurityError("Identificador de informe inválido")
+    try:
+        parsed = uuid.UUID(raw_id)
+    except ValueError as exc:
+        raise EvidenceSecurityError("Identificador de informe inválido") from exc
+    return parsed.hex if len(raw_id) == 32 else str(parsed)
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -147,10 +165,12 @@ PLATAFORMA: {mensaje.plataforma or "No especificada"}
 ----------------------------------------------------------------------
 DATOS DE LA COMUNICACIÓN
 ----------------------------------------------------------------------
-Remitente: {mensaje.remitente_id}
-Destinatario: {mensaje.destinatario_id}
+Remitente pseudonimizado: {pseudonymize(mensaje.remitente_id)}
+Destinatario pseudonimizado: {pseudonymize(mensaje.destinatario_id)}
 Fecha mensaje: {mensaje.fecha_hora}
-IP origen: {mensaje.ip_origen or "No registrada"}
+IP declarada por la fuente: {mensaje.ip_origen or "No registrada"}
+Fuente IP: {getattr(mensaje, "ip_source", "CLIENT_DECLARED")}
+IP verificada: {getattr(mensaje, "ip_verified", False)}
 
 ----------------------------------------------------------------------
 ANÁLISIS DE RIESGO
@@ -174,16 +194,10 @@ Nota: {ip_info.get("nota", "Sin observaciones")}
 CONCLUSIONES
 ----------------------------------------------------------------------
 """
-    if "AGRESOR" in perfil:
-        contenido += """⚠️ RIESGO ELEVADO — ACCIONES RECOMENDADAS:
-- Preservar toda la evidencia sin modificar
-- Bloquear al usuario inmediatamente
-- Presentar denuncia ante autoridad competente
-- Solicitar datos reales del titular por mandamiento judicial
-- Acompañar a la persona menor con adultos de confianza
+    if analisis["puntaje"] > 0:
+        contenido += """ℹ️ Indicadores detectados — preservar evidencia y solicitar revisión humana.
+El resultado automatizado es apoyo técnico y no identifica culpables ni reemplaza una decisión humana.
 """
-    elif analisis["puntaje"] > 0:
-        contenido += """ℹ️ Señales de riesgo — mantener vigilancia y conversar con la persona menor"""
     else:
         contenido += """✅ Sin indicadores de riesgo detectados"""
     return (
@@ -206,7 +220,9 @@ def crear_informe(
     except EvidenceSecurityError as exc:
         raise EvidenceSecurityError("Claves de auditoría no configuradas") from exc
 
-    report_id = uuid.uuid4().hex
+    # New reports use a complete canonical UUID. Legacy 32-hex IDs remain
+    # readable for backwards compatibility, but are never generated again.
+    report_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
     authenticated_metadata: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -214,6 +230,7 @@ def crear_informe(
         "owner": owner,
         "created_at": created_at,
         "cipher": "AES-256-GCM",
+        "retention_status": EvidenceStatus.ACTIVE.value,
     }
 
     # Preserve original message content and normalized analysis result
@@ -224,9 +241,12 @@ def crear_informe(
         "detector_version": 1,
     }
 
+    key_id, encryption_key = current_key()
     nonce = os.urandom(12)
+    authenticated_metadata["key_id"] = key_id
+    evidence_bundle["retention_status"] = EvidenceStatus.ACTIVE.value
     try:
-        ciphertext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).encrypt(
+        ciphertext = AESGCM(encryption_key).encrypt(
             nonce,
             json.dumps(evidence_bundle, ensure_ascii=False).encode("utf-8"),
             _canonical(authenticated_metadata),
@@ -251,10 +271,12 @@ def crear_informe(
 
 def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) -> dict:
     """Read and decrypt report, returning original message and analysis."""
-    if not re.fullmatch(r"[0-9a-f]{32}", informe_id):
+    try:
+        safe_id = _validated_report_id(informe_id)
+    except EvidenceSecurityError:
         return {}
-    encrypted_path = CARPETA_INFORMES / f"informe_{informe_id}.enc"
-    metadata_path = CARPETA_INFORMES / f"informe_{informe_id}.json"
+    encrypted_path = CARPETA_INFORMES / f"informe_{safe_id}.enc"
+    metadata_path = CARPETA_INFORMES / f"informe_{safe_id}.json"
     if not encrypted_path.is_file() or not metadata_path.is_file():
         return {}
     with audit_state.transaction(CARPETA_INFORMES):
@@ -279,11 +301,26 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
         ):
             return {}
         try:
+            authenticated_fields: tuple[str, ...] = (
+                "schema_version",
+                "id",
+                "owner",
+                "created_at",
+                "cipher",
+            )
+            if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get(
+                "key_id"
+            ):
+                authenticated_fields += ("key_id",)
+            if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get(
+                "retention_status"
+            ):
+                authenticated_fields += ("retention_status",)
             authenticated_metadata = {
-                key: metadata[key]
-                for key in ("schema_version", "id", "owner", "created_at", "cipher")
+                key: metadata[key] for key in authenticated_fields
             }
-            plaintext = AESGCM(_decode_key("EVIDENCE_ENCRYPTION_KEY")).decrypt(
+            encryption_key = key_for(str(metadata.get("key_id", "legacy")))
+            plaintext = AESGCM(encryption_key).decrypt(
                 nonce, ciphertext, _canonical(authenticated_metadata)
             )
             content = plaintext.decode("utf-8")
@@ -311,4 +348,97 @@ def leer_informe(informe_id: str, requester: str, can_read_all: bool = False) ->
             "original_message_content": evidence_bundle.get("original_message_content"),
             "report_text": evidence_bundle.get("report_text"),
             "analysis_result": evidence_bundle.get("analysis_result"),
+            "retention_status": evidence_bundle.get(
+                "retention_status", EvidenceStatus.ACTIVE.value
+            ),
         }
+
+
+def actualizar_estado_informe(
+    informe_id: str,
+    nuevo_estado: EvidenceStatus,
+    actor: str,
+) -> EvidenceStatus:
+    """Change evidence lifecycle state while re-authenticating the ciphertext.
+
+    A legal hold cannot be removed through this operation. Every transition is
+    appended to the tamper-evident audit chain.
+    """
+    safe_id = _validated_report_id(informe_id)
+    encrypted_path = CARPETA_INFORMES / f"informe_{safe_id}.enc"
+    metadata_path = CARPETA_INFORMES / f"informe_{safe_id}.json"
+    with audit_state.transaction(CARPETA_INFORMES):
+        _read_verified_audit()
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            ciphertext = encrypted_path.read_bytes()
+            nonce = base64.b64decode(metadata["nonce"], altchars=b"-_", validate=True)
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise EvidenceSecurityError("Informe no disponible") from exc
+        if not isinstance(metadata, dict) or metadata.get("id") != informe_id:
+            raise EvidenceSecurityError("Informe no disponible")
+        current_status = EvidenceStatus(
+            metadata.get("retention_status", EvidenceStatus.ACTIVE.value)
+        )
+        if not can_transition(current_status, nuevo_estado):
+            raise EvidenceSecurityError("Transición de retención no permitida")
+        fields: tuple[str, ...] = (
+            "schema_version",
+            "id",
+            "owner",
+            "created_at",
+            "cipher",
+        )
+        if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get("key_id"):
+            fields += ("key_id",)
+        if metadata.get("schema_version") == SCHEMA_VERSION and metadata.get(
+            "retention_status"
+        ):
+            fields += ("retention_status",)
+        authenticated_metadata = {key: metadata[key] for key in fields}
+        try:
+            plaintext = AESGCM(key_for(str(metadata.get("key_id", "legacy")))).decrypt(
+                nonce, ciphertext, _canonical(authenticated_metadata)
+            )
+            bundle = json.loads(plaintext.decode("utf-8"))
+        except (
+            InvalidTag,
+            ValueError,
+            KeyError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as exc:
+            raise EvidenceSecurityError("Evidencia no pudo ser verificada") from exc
+        if not isinstance(bundle, dict):
+            raise EvidenceSecurityError("Evidencia no pudo ser verificada")
+        bundle["retention_status"] = nuevo_estado.value
+        key_id, encryption_key = current_key()
+        metadata["key_id"] = key_id
+        metadata["retention_status"] = nuevo_estado.value
+        authenticated_metadata = {
+            key: metadata[key]
+            for key in (
+                "schema_version",
+                "id",
+                "owner",
+                "created_at",
+                "cipher",
+                "key_id",
+                "retention_status",
+            )
+        }
+        new_nonce = os.urandom(12)
+        new_ciphertext = AESGCM(encryption_key).encrypt(
+            new_nonce,
+            json.dumps(bundle, ensure_ascii=False).encode("utf-8"),
+            _canonical(authenticated_metadata),
+        )
+        metadata["nonce"] = base64.urlsafe_b64encode(new_nonce).decode("ascii")
+        metadata["ciphertext_sha256"] = hashlib.sha256(new_ciphertext).hexdigest()
+        _atomic_write(encrypted_path, new_ciphertext)
+        _atomic_write(
+            metadata_path,
+            json.dumps(metadata, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+        )
+        _append_audit("evidence_status_changed", informe_id, actor)
+    return nuevo_estado

@@ -1,6 +1,8 @@
 import unicodedata
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from enum import Enum
+from ipaddress import IPv4Address, IPv6Address
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -20,6 +22,7 @@ from api.auth import (
     validate_configuration,
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
+from api.retention import EvidenceStatus
 from api.security import REPORT_LIMITER, ApiShieldMiddleware, env_list
 
 
@@ -48,14 +51,24 @@ app.add_middleware(
 app.add_middleware(ApiShieldMiddleware)
 
 
+class IpSource(str, Enum):
+    CLIENT_DECLARED = "CLIENT_DECLARED"
+    PLATFORM_EXPORT = "PLATFORM_EXPORT"
+    SERVER_OBSERVED = "SERVER_OBSERVED"
+    PROVIDER_RECORD = "PROVIDER_RECORD"
+    OTHER = "OTHER"
+
+
 class Mensaje(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     remitente_id: str = Field(min_length=1, max_length=128)
     destinatario_id: str = Field(min_length=1, max_length=128)
     contenido: str = Field(min_length=1, max_length=10_000)
-    fecha_hora: str | None = Field(default=None, max_length=64)
-    ip_origen: str | None = Field(default=None, max_length=45)
+    fecha_hora: datetime | None = None
+    ip_origen: IPv4Address | IPv6Address | None = None
+    ip_source: IpSource = IpSource.CLIENT_DECLARED
+    ip_verified: bool = False
     plataforma: str | None = Field(default=None, max_length=100)
 
     @field_validator("remitente_id", "destinatario_id", "contenido", "plataforma")
@@ -65,9 +78,7 @@ class Mensaje(BaseModel):
             raise ValueError("El campo no puede estar vacío")
         return value
 
-    @field_validator(
-        "remitente_id", "destinatario_id", "plataforma", "fecha_hora", "ip_origen"
-    )
+    @field_validator("remitente_id", "destinatario_id", "plataforma", "ip_source")
     @classmethod
     def limit_to_single_line(cls, value: str | None) -> str | None:
         if value is not None and any(
@@ -89,6 +100,10 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class EstadoInforme(BaseModel):
+    estado: EvidenceStatus
 
 
 @app.post("/token", response_model=TokenResponse)
@@ -114,7 +129,9 @@ def login(
 def analizar_mensaje(
     request: Request,
     mensaje: Mensaje,
-    user: Annotated[User, Depends(require_roles(Role.ADMIN, Role.ANALYST))],
+    user: Annotated[
+        User, Depends(require_roles(Role.ADMIN, Role.ANALYST, Role.SUPERVISOR))
+    ],
 ):
     rate = REPORT_LIMITER.check(user.username)
     if not rate.allowed:
@@ -125,11 +142,11 @@ def analizar_mensaje(
         )
 
     if not mensaje.fecha_hora:
-        mensaje.fecha_hora = datetime.now(timezone.utc).isoformat()
+        mensaje.fecha_hora = datetime.now(timezone.utc)
 
     resultado_patrones = detect_patterns.evaluar_texto(mensaje.contenido)
     datos_ip = (
-        ip_analysis.analizar_ip(mensaje.ip_origen.strip()) if mensaje.ip_origen else {}
+        ip_analysis.analizar_ip(str(mensaje.ip_origen)) if mensaje.ip_origen else {}
     )
     perfil = detect_patterns.identificar_perfil(resultado_patrones)
     try:
@@ -160,7 +177,7 @@ def obtener_informe(
         informe = report_generator.leer_informe(
             informe_id,
             requester=user.username,
-            can_read_all=user.role in {Role.ADMIN, Role.AUDITOR},
+            can_read_all=user.role in {Role.ADMIN, Role.AUDITOR, Role.SUPERVISOR},
         )
     except report_generator.EvidenceSecurityError as exc:
         raise HTTPException(
@@ -188,6 +205,23 @@ async def obtener_jurisdiccion(country_code: str):
         "reporting_channels": policy.reporting_channels,
         "cross_border_review_required": policy.cross_border_review_required,
     }
+
+
+@app.patch("/informe/{informe_id}/estado", response_model=EstadoInforme)
+def cambiar_estado_informe(
+    informe_id: str,
+    cambio: EstadoInforme,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN, Role.SUPERVISOR))],
+):
+    try:
+        estado = report_generator.actualizar_estado_informe(
+            informe_id, cambio.estado, user.username
+        )
+    except report_generator.EvidenceSecurityError as exc:
+        raise HTTPException(
+            status_code=409, detail="Cambio de estado no permitido"
+        ) from exc
+    return EstadoInforme(estado=estado)
 
 
 @app.get("/estado")

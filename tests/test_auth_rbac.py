@@ -40,6 +40,11 @@ def client(monkeypatch, tmp_path):
             "password_hash": PasswordHash.recommended().hash(PASSWORD),
             "role": "auditor",
         },
+        {
+            "username": "supervisor",
+            "password_hash": PasswordHash.recommended().hash(PASSWORD),
+            "role": "supervisor",
+        },
     ]
     monkeypatch.setenv("JWT_SECRET", "test-secret-that-is-longer-than-32-bytes")
     monkeypatch.setenv("AUTH_USERS_JSON", json.dumps(users))
@@ -143,6 +148,32 @@ def test_admin_can_read_any_report(client):
         ).status_code
         == 200
     )
+
+
+def test_supervisor_can_change_status_but_legal_hold_blocks_deletion(client):
+    created = client.post(
+        "/analizar-mensaje",
+        json=message_payload(),
+        headers=headers(client, "analyst-a"),
+    )
+    report_id = created.json()["informe_id"]
+    supervisor = headers(client, "supervisor")
+    assert (
+        client.patch(
+            f"/informe/{report_id}/estado",
+            json={"estado": "LEGAL_HOLD"},
+            headers=supervisor,
+        ).status_code
+        == 200
+    )
+    blocked = client.patch(
+        f"/informe/{report_id}/estado",
+        json={"estado": "DELETION_PENDING"},
+        headers=supervisor,
+    )
+    assert blocked.status_code == 409
+    report = client.get(f"/informe/{report_id}", headers=supervisor)
+    assert report.json()["retention_status"] == "LEGAL_HOLD"
 
 
 def test_tampered_token_is_rejected(client):
