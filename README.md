@@ -13,9 +13,9 @@ Este repositorio también contiene una serie educativa local-first pensada para 
 | Nº | Proyecto original | Estado |
 |---:|---|---|
 | 1 | 📱 [Cuaderno de Seguridad Digital para Chicos](cuaderno-seguridad-digital/) | ✅ Implementado |
-| 2 | 🧠 Organizador de Emociones | ⏳ Pendiente |
-| 3 | 🌱 Mi Rincón de Metas y Crecimiento | ⏳ Pendiente |
-| 4 | 🛡️ Mi Espacio Seguro | ⏳ Pendiente |
+| 2 | 🧠 [Organizador de Emociones](organizador-emociones/) | ✅ Implementado |
+| 3 | 🌱 [Mi Rincón de Metas y Crecimiento](rincon-metas-crecimiento/) | ✅ Implementado |
+| 4 | 🛡️ [Mi Espacio Seguro](mi-espacio-seguro/) | ✅ Implementado |
 | 5 | 📖 [Libro de Recuerdos y Sueños](libro-recuerdos-suenos/) | ✅ Implementado |
 | 6 | 🤝 [Mi Primera Comunidad de Ayuda](primera-comunidad-ayuda/) | ✅ Implementado |
 
