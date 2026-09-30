@@ -1,0 +1,3 @@
+# Punto de entrada único para instalar la API desde la raíz.
+# Las versiones se mantienen en api/requirements.txt para evitar duplicación.
+-r api/requirements.txt
