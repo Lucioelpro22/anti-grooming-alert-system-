@@ -11,6 +11,8 @@ Esta serie nació como un conjunto de proyectos personales, educativos y adaptab
 
 ## Estado del repositorio
 
+✅ **Serie original completa: 6 de 6 proyectos implementados.**
+
 El repositorio también contiene herramientas adicionales de seguridad digital desarrolladas durante la evolución de la serie. Esas herramientas complementarias no reemplazan la definición original de estos seis proyectos.
 
 ## Principios comunes
