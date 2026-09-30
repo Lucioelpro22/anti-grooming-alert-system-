@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="description" content="Organizador local de emociones para registrar cómo me siento sin juicio.">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>Organizador de Emociones</title>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Proyecto 2 de 6 · Herramientas de Crecimiento y Protección</p>
+      <h1>🧠 Organizador de Emociones</h1>
+      <p class="subtitle">Puedo sentir muchas cosas distintas. Ninguna emoción me hace “bueno” o “malo”.</p>
+    </div>
+    <button id="installBtn" class="secondary hidden" type="button">Instalar app</button>
+  </header>
+
+  <nav class="tabs" aria-label="Secciones principales">
+    <button class="tab active" data-view="hoy">😊 Cómo me siento</button>
+    <button class="tab" data-view="mes">🗓️ Mi mes</button>
+    <button class="tab" data-view="recursos">🌿 Qué me ayuda</button>
+    <button class="tab" data-view="compartir">🤝 Compartir</button>
+  </nav>
+
+  <main class="container">
+    <section id="hoy" class="view active">
+      <h2>😊 ¿Cómo me siento ahora?</h2>
+      <p class="lead">Puedo elegir una emoción y escribir un poco, o solo guardar el color.</p>
+      <article class="card">
+        <div id="emotionChoices" class="emotion-grid" role="group" aria-label="Elegir emoción"></div>
+        <label class="field">¿Qué pasó? (opcional)
+          <textarea id="note" maxlength="1000" rows="4" placeholder="Hoy pasó que..."></textarea>
+        </label>
+        <label class="field">¿Qué tan fuerte se siente?
+          <input id="intensity" type="range" min="1" max="5" value="3">
+          <span id="intensityText">3 de 5</span>
+        </label>
+        <button id="saveEntry" type="button">Guardar cómo me siento</button>
+        <p id="saveStatus" class="status" role="status"></p>
+      </article>
+
+      <article class="card">
+        <h3>Una frase para hoy</h3>
+        <p id="supportPhrase" class="support">Está bien sentir lo que siento. Puedo darme tiempo.</p>
+        <button id="newPhrase" class="secondary" type="button">Otra frase</button>
+      </article>
+
+      <div id="recentEntries" class="timeline"></div>
+    </section>
+
+    <section id="mes" class="view">
+      <h2>🗓️ Mi mes en colores</h2>
+      <p class="lead">No es un puntaje. Es una forma de mirar cómo fueron cambiando mis días.</p>
+      <article class="card">
+        <div class="month-head">
+          <button id="prevMonth" class="secondary" type="button">←</button>
+          <h3 id="monthTitle"></h3>
+          <button id="nextMonth" class="secondary" type="button">→</button>
+        </div>
+        <div id="monthGrid" class="month-grid"></div>
+      </article>
+      <article class="card">
+        <h3>Lo que noto</h3>
+        <p id="monthSummary">Todavía no hay registros para este mes.</p>
+      </article>
+    </section>
+
+    <section id="recursos" class="view">
+      <h2>🌿 Qué me ayuda</h2>
+      <p class="lead">Puedo probar cosas simples y quedarme con las que me sirven.</p>
+      <div class="resource-grid">
+        <article class="card"><h3>🌬️ Respirar</h3><p>Inhalo despacio, exhalo un poco más lento.</p></article>
+        <article class="card"><h3>🚶 Moverme</h3><p>Caminar, estirar o cambiar de ambiente puede ayudar.</p></article>
+        <article class="card"><h3>🎵 Escuchar</h3><p>Música, silencio o sonidos tranquilos.</p></article>
+        <article class="card"><h3>📝 Escribir</h3><p>Poner en palabras algo puede ordenar lo que siento.</p></article>
+        <article class="card"><h3>🤝 Hablar</h3><p>Contarle a alguien de confianza cómo me siento.</p></article>
+        <article class="card"><h3>🛌 Descansar</h3><p>A veces necesito bajar el ritmo y recuperar energía.</p></article>
+      </div>
+      <article class="card">
+        <h3>Mis recursos favoritos</h3>
+        <label class="field">Algo que suele ayudarme
+          <input id="resourceText" maxlength="160" placeholder="Ej.: dibujar un rato">
+        </label>
+        <button id="addResource" type="button">Agregar</button>
+        <div id="resourceList" class="chips"></div>
+      </article>
+    </section>
+
+    <section id="compartir" class="view">
+      <h2>🤝 Compartir si quiero</h2>
+      <p class="lead">Mis registros son míos. Puedo compartir un resumen solo cuando yo decida.</p>
+      <article class="card">
+        <h3>Resumen de los últimos 7 días</h3>
+        <p id="sharePreview"></p>
+        <button id="shareSummary" type="button">Compartir resumen</button>
+        <p class="small">Usa la función de compartir del dispositivo si está disponible. La app no envía nada automáticamente.</p>
+      </article>
+      <article class="card">
+        <h3>🫶 Necesito hablar con alguien</h3>
+        <p>Si algo me preocupa mucho o no puedo manejarlo solo/a, pedir ayuda es una buena decisión.</p>
+        <button id="helpButton" type="button">Ver pasos para pedir ayuda</button>
+      </article>
+      <article class="card danger-zone">
+        <h3>Borrar mis registros</h3>
+        <button id="resetAll" class="danger" type="button">Borrar todos los datos locales</button>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="helpDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" aria-label="Cerrar">×</button>
+      <h2>No tengo que resolver todo solo/a</h2>
+      <ol>
+        <li>Busco a una persona adulta de confianza.</li>
+        <li>Le digo con palabras simples cómo me siento.</li>
+        <li>Si me cuesta hablar, puedo mostrarle una nota o pedirle que se quede conmigo.</li>
+        <li>Si hay peligro inmediato, busco ayuda adulta o servicios de emergencia de mi zona.</li>
+      </ol>
+      <p class="small">Esta app no diagnostica ni reemplaza apoyo profesional.</p>
+    </form>
+  </dialog>
+
+  <footer><p>Lucioelpro22 · MIT · Local-first · Sin cuentas, publicidad ni diagnóstico automático.</p></footer>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
