@@ -9,6 +9,11 @@ from dataclasses import dataclass
 
 from starlette.types import Message, Receive, Scope, Send
 
+from api.client_ip import (
+    ClientIPConfigurationError,
+    ClientIPResolutionError,
+    resolve_client_ip,
+)
 from api.production_security import is_production
 from api.rate_limit_backend import RedisRateLimitBackend
 from api.redis_security import (
@@ -202,11 +207,35 @@ class ApiShieldMiddleware:
             return
 
         client = scope.get("client")
-        client_host = client[0] if client else "unknown"
+        peer_host = client[0] if client else None
+        try:
+            client_ip = resolve_client_ip(
+                peer_host,
+                scope.get("headers", []),
+            )
+        except ClientIPConfigurationError:
+            await self._reject(
+                503,
+                "Configuración de proxy no disponible",
+                secure_send,
+            )
+            return
+        except ClientIPResolutionError:
+            await self._reject(
+                400,
+                "Encabezado de proxy inválido",
+                secure_send,
+            )
+            return
+
+        scope.setdefault("state", {})["client_ip"] = client_ip.address
+        scope["state"]["client_ip_source"] = client_ip.source
+        scope["state"]["trusted_proxy"] = client_ip.trusted_proxy
+
         API_LIMITER.attempts = env_positive_int("API_RATE_LIMIT", 120)
         API_LIMITER.window_seconds = env_positive_int("API_RATE_WINDOW_SECONDS", 60)
         try:
-            rate = API_LIMITER.check(client_host)
+            rate = API_LIMITER.check(client_ip.address)
         except RateLimitBackendUnavailable:
             await self._reject(
                 503,
