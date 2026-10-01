@@ -32,7 +32,11 @@ from api.mfa import (
     verify_mfa,
 )
 from api.pseudonymization import pseudonymization_key
-from api.security_audit import validate_security_audit_configuration
+from api.security_audit import (
+    SecurityAuditError,
+    record_security_event,
+    validate_security_audit_configuration,
+)
 from api.session_management import (
     InvalidRefreshToken,
     RefreshReuseDetected,
@@ -395,8 +399,24 @@ def revoke_access_token(user: User) -> None:
         ) from exc
 
 
-def get_current_user(token: Annotated[str, Depends(OAUTH2_SCHEME)]) -> User:
-    return decode_access_token(token)
+def get_current_user(
+    request: Request,
+    token: Annotated[str, Depends(OAUTH2_SCHEME)],
+) -> User:
+    try:
+        return decode_access_token(token)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            try:
+                record_security_event(
+                    "auth_backend_error",
+                    request=request,
+                    severity="critical",
+                    reason="access_token_validation",
+                )
+            except SecurityAuditError:
+                pass
+        raise
 
 
 def require_roles(*allowed: Role):
