@@ -534,6 +534,91 @@ def test_login_rate_limit(client):
     assert response.status_code == 429
 
 
+def test_invalid_existing_and_unknown_accounts_are_indistinguishable(client):
+    existing = client.post(
+        "/token",
+        data={
+            "username": "analyst-a",
+            "password": "wrong",  # pragma: allowlist secret
+        },
+    )
+    unknown = client.post(
+        "/token",
+        data={
+            "username": "does-not-exist",
+            "password": "wrong",  # pragma: allowlist secret
+        },
+    )
+
+    assert existing.status_code == unknown.status_code == 401
+    assert existing.json()["detail"] == unknown.json()["detail"]
+    assert existing.json()["detail"] == "Usuario, contraseña o MFA inválidos"
+
+
+def test_client_scope_detects_password_spraying(client, monkeypatch):
+    monkeypatch.setenv("LOGIN_PAIR_ATTEMPTS", "99")
+    monkeypatch.setenv("LOGIN_ACCOUNT_ATTEMPTS", "99")
+    monkeypatch.setenv("LOGIN_CLIENT_ATTEMPTS", "2")
+    LOGIN_LIMITER.clear()
+
+    for username in ("spray-a", "spray-b"):
+        response = client.post(
+            "/token",
+            data={
+                "username": username,
+                "password": "wrong",  # pragma: allowlist secret
+            },
+        )
+        assert response.status_code == 401
+
+    blocked = client.post(
+        "/token",
+        data={
+            "username": "spray-c",
+            "password": "wrong",  # pragma: allowlist secret
+        },
+    )
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "Demasiados intentos; probá más tarde"
+
+    event = security_audit.read_security_events()[-1]
+    assert event["event"] == "password_spraying_suspected"
+    assert event["severity"] == "critical"
+    assert event["reason"] == "client_scope"
+
+
+def test_account_scope_detects_credential_stuffing(client, monkeypatch):
+    monkeypatch.setenv("LOGIN_PAIR_ATTEMPTS", "99")
+    monkeypatch.setenv("LOGIN_ACCOUNT_ATTEMPTS", "2")
+    monkeypatch.setenv("LOGIN_CLIENT_ATTEMPTS", "99")
+    LOGIN_LIMITER.clear()
+
+    for _ in range(2):
+        response = client.post(
+            "/token",
+            data={
+                "username": "analyst-a",
+                "password": "wrong",  # pragma: allowlist secret
+            },
+        )
+        assert response.status_code == 401
+
+    blocked = client.post(
+        "/token",
+        data={
+            "username": "analyst-a",
+            "password": "wrong",  # pragma: allowlist secret
+        },
+    )
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "Demasiados intentos; probá más tarde"
+
+    event = security_audit.read_security_events()[-1]
+    assert event["event"] == "credential_stuffing_suspected"
+    assert event["severity"] == "critical"
+    assert event["reason"] == "account_scope"
+
+
 def test_successful_login_resets_failed_login_counter(client):
     for _ in range(4):
         response = client.post(

@@ -29,6 +29,7 @@ from api.login_rate_limit import (
     LoginRateLimitConfigurationError,
     LoginRateLimitStore,
     opaque_login_key,
+    opaque_scope_key,
 )
 from api.mfa import (
     MFABackendUnavailable,
@@ -437,6 +438,16 @@ def require_roles(*allowed: Role):
     return dependency
 
 
+class LoginRateLimitExceeded(HTTPException):
+    def __init__(self, retry_after: int, scope: str) -> None:
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos; probá más tarde",
+            headers={"Retry-After": str(retry_after)},
+        )
+        self.rate_limit_scope = scope
+
+
 class LoginRateLimiter:
     def __init__(self) -> None:
         self._store = LoginRateLimitStore()
@@ -447,9 +458,14 @@ class LoginRateLimiter:
         except LoginRateLimitConfigurationError as exc:
             raise RuntimeError("Configuración de rate limit de login inválida") from exc
 
-    def _key(self, request: Request, username: str) -> str:
+    def _keys(self, request: Request, username: str) -> dict[str, str]:
         client = request.client.host if request.client else "unknown"
-        return opaque_login_key(client, username)
+        normalized_username = username.strip().lower()
+        return {
+            "pair": opaque_login_key(client, normalized_username),
+            "account": opaque_scope_key("account", normalized_username),
+            "client": opaque_scope_key("client", client),
+        }
 
     @staticmethod
     def _backend_unavailable() -> HTTPException:
@@ -459,24 +475,36 @@ class LoginRateLimiter:
         )
 
     def check(self, request: Request, username: str) -> None:
+        blocked: list[tuple[str, int]] = []
         try:
-            decision = self._store.check(self._key(request, username))
+            for scope, key in self._keys(request, username).items():
+                decision = self._store.check(key, self._store.policy(scope))
+                if not decision.allowed:
+                    blocked.append((scope, decision.retry_after))
         except (
             LoginRateLimitBackendUnavailable,
             LoginRateLimitCapacityExceeded,
             LoginRateLimitConfigurationError,
         ) as exc:
             raise self._backend_unavailable() from exc
-        if not decision.allowed:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Demasiados intentos; probá más tarde",
-                headers={"Retry-After": str(decision.retry_after)},
+
+        if blocked:
+            scopes = {scope for scope, _ in blocked}
+            if "account" in scopes:
+                scope = "account"
+            elif "client" in scopes:
+                scope = "client"
+            else:
+                scope = "pair"
+            raise LoginRateLimitExceeded(
+                max(retry_after for _, retry_after in blocked),
+                scope,
             )
 
     def failure(self, request: Request, username: str) -> None:
         try:
-            self._store.failure(self._key(request, username))
+            for scope, key in self._keys(request, username).items():
+                self._store.failure(key, self._store.policy(scope))
         except (
             LoginRateLimitBackendUnavailable,
             LoginRateLimitCapacityExceeded,
@@ -485,8 +513,10 @@ class LoginRateLimiter:
             raise self._backend_unavailable() from exc
 
     def success(self, request: Request, username: str) -> None:
+        keys = self._keys(request, username)
         try:
-            self._store.success(self._key(request, username))
+            self._store.success(keys["pair"])
+            self._store.success(keys["account"])
         except (
             LoginRateLimitBackendUnavailable,
             LoginRateLimitCapacityExceeded,
