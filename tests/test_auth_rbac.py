@@ -75,6 +75,18 @@ def client(monkeypatch, tmp_path):
         "AUDIT_STATE_DB",
         str(tmp_path.parent / (tmp_path.name + "-state") / "audit.sqlite"),
     )
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_DIR",
+        str(tmp_path.parent / (tmp_path.name + "-security-audit")),
+    )
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_STATE_DB",
+        str(
+            tmp_path.parent
+            / (tmp_path.name + "-security-state")
+            / "checkpoint.sqlite"
+        ),
+    )
     REPORT_LIMITER.clear()
     LOGIN_LIMITER._failures.clear()
     API_LIMITER.clear()
