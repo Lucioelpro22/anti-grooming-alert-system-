@@ -55,9 +55,7 @@ class MemoryTokenRevocationBackend:
         with self._lock:
             self._prune_expired(now)
             if token_id not in self._tokens and len(self._tokens) >= self.max_entries:
-                raise RevocationCapacityExceeded(
-                    "JWT revocation store is at capacity"
-                )
+                raise RevocationCapacityExceeded("JWT revocation store is at capacity")
             self._tokens[token_id] = expires_at
 
     def is_revoked(self, token_id: str) -> bool:
