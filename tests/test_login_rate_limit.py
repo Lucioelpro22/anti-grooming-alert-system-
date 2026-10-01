@@ -139,9 +139,7 @@ def test_store_fails_closed_when_redis_is_unavailable(monkeypatch):
         ("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "-1"),
     ],
 )
-def test_invalid_login_rate_limit_configuration_is_rejected(
-    monkeypatch, name, value
-):
+def test_invalid_login_rate_limit_configuration_is_rejected(monkeypatch, name, value):
     monkeypatch.setenv(name, value)
 
     with pytest.raises(RuntimeError):
