@@ -198,9 +198,7 @@ def test_logout_all_invalidates_all_user_access_and_refresh_tokens(client):
 
 
 def test_invalid_refresh_token_is_rejected(client):
-    response = client.post(
-        "/token/refresh", json={"refresh_token": "x" * 43}
-    )
+    response = client.post("/token/refresh", json={"refresh_token": "x" * 43})
     assert response.status_code == 401
 
 
