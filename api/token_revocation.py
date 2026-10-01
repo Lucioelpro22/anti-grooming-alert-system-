@@ -147,7 +147,7 @@ class TokenRevocationStore:
             backend.revoke(token_id, expires_at)
         except RevocationCapacityExceeded:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise RevocationBackendUnavailable(
                 "JWT revocation backend is unavailable"
             ) from exc
@@ -156,7 +156,7 @@ class TokenRevocationStore:
         backend = self._selected_backend()
         try:
             return backend.is_revoked(token_id)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise RevocationBackendUnavailable(
                 "JWT revocation backend is unavailable"
             ) from exc
