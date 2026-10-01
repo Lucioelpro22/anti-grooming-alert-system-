@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated
@@ -18,6 +18,11 @@ from pwdlib import PasswordHash
 
 from api.key_management import current_key
 from api.report_generator import _decode_key
+from api.token_revocation import (
+    RevocationBackendUnavailable,
+    RevocationCapacityExceeded,
+    TokenRevocationStore,
+)
 
 
 class Role(str, Enum):
@@ -31,6 +36,8 @@ class Role(str, Enum):
 class User:
     username: str
     role: Role
+    token_id: str | None = field(default=None, kw_only=True)
+    token_expires_at: float | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -46,6 +53,7 @@ JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "anti-grooming-alert-system"
 JWT_AUDIENCE = "anti-grooming-api"
 ACCESS_TOKEN_MINUTES = 15
+TOKEN_REVOCATIONS = TokenRevocationStore()
 
 # Known example/placeholder values that must never be used in production
 BLACKLISTED_SECRETS = {
@@ -127,6 +135,7 @@ def validate_encryption_keys() -> None:
 
 
 def validate_configuration() -> None:
+    TOKEN_REVOCATIONS.validate_configuration()
     _jwt_secret()
     users = load_users()
     if not users or not any(not user.disabled for user in users.values()):
@@ -177,8 +186,27 @@ def decode_access_token(token: str) -> User:
             options={"require": ["sub", "role", "iat", "nbf", "exp", "jti"]},
         )
         username = payload.get("sub")
+        token_id = payload.get("jti")
+        expires_at = payload.get("exp")
         role = Role(payload.get("role"))
-        if not isinstance(username, str) or not username:
+        if (
+            not isinstance(username, str)
+            or not username
+            or not isinstance(token_id, str)
+            or not token_id
+            or len(token_id) > 128
+            or not isinstance(expires_at, (int, float))
+            or isinstance(expires_at, bool)
+        ):
+            raise InvalidTokenError
+        try:
+            revoked = TOKEN_REVOCATIONS.is_revoked(token_id)
+        except RevocationBackendUnavailable as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Servicio de revocación no disponible",
+            ) from exc
+        if revoked:
             raise InvalidTokenError
     except (InvalidTokenError, ValueError) as exc:
         raise credentials_error from exc
@@ -186,7 +214,28 @@ def decode_access_token(token: str) -> User:
     stored = load_users().get(username)
     if stored is None or stored.disabled or stored.role != role:
         raise credentials_error
-    return User(username=stored.username, role=stored.role)
+    return User(
+        username=stored.username,
+        role=stored.role,
+        token_id=token_id,
+        token_expires_at=float(expires_at),
+    )
+
+
+def revoke_access_token(user: User) -> None:
+    if user.token_id is None or user.token_expires_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        TOKEN_REVOCATIONS.revoke(user.token_id, user.token_expires_at)
+    except (RevocationBackendUnavailable, RevocationCapacityExceeded) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio de revocación no disponible",
+        ) from exc
 
 
 def get_current_user(token: Annotated[str, Depends(OAUTH2_SCHEME)]) -> User:

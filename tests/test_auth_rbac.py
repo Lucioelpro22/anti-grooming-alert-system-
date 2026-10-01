@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
 from api import report_generator
-from api.auth import JWT_AUDIENCE, JWT_ISSUER, LOGIN_LIMITER
+from api.auth import JWT_AUDIENCE, JWT_ISSUER, LOGIN_LIMITER, TOKEN_REVOCATIONS
 from api.security import API_LIMITER, REPORT_LIMITER
 
 PASSWORD = "correct-horse-battery-staple"  # pragma: allowlist secret
@@ -55,6 +55,8 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "65536")
     monkeypatch.setenv("API_RATE_LIMIT", "1000")
     monkeypatch.setenv("API_RATE_WINDOW_SECONDS", "60")
+    monkeypatch.setenv("TOKEN_REVOCATION_BACKEND", "memory")
+    monkeypatch.delenv("REDIS_URL", raising=False)
     monkeypatch.setattr(report_generator, "CARPETA_INFORMES", tmp_path)
     monkeypatch.setenv(
         "AUDIT_STATE_DB",
@@ -63,11 +65,13 @@ def client(monkeypatch, tmp_path):
     REPORT_LIMITER.clear()
     LOGIN_LIMITER._failures.clear()
     API_LIMITER.clear()
+    TOKEN_REVOCATIONS.clear()
     from api.main import app
 
     with TestClient(app) as test_client:
         yield test_client
     API_LIMITER.clear()
+    TOKEN_REVOCATIONS.clear()
 
 
 def token(client, username, password=PASSWORD):
@@ -90,6 +94,35 @@ def message_payload():
 
 def test_protected_endpoint_rejects_anonymous(client):
     assert client.post("/analizar-mensaje", json=message_payload()).status_code == 401
+
+
+def test_logout_revokes_token_and_prevents_replay(client):
+    access_token = token(client, "analyst-a")
+    auth = {"Authorization": f"Bearer {access_token}"}
+    assert client.get("/informe/deadbeef", headers=auth).status_code == 404
+
+    logout = client.post("/logout", headers=auth)
+    assert logout.status_code == 200
+    assert logout.json()["estado"] == "sesión revocada"
+
+    assert client.get("/informe/deadbeef", headers=auth).status_code == 401
+    assert client.post("/logout", headers=auth).status_code == 401
+
+
+def test_logout_requires_authentication(client):
+    assert client.post("/logout").status_code == 401
+
+
+def test_revocation_backend_outage_fails_closed(client, monkeypatch):
+    access_token = token(client, "analyst-a")
+    auth = {"Authorization": f"Bearer {access_token}"}
+    monkeypatch.setenv("TOKEN_REVOCATION_BACKEND", "redis")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    TOKEN_REVOCATIONS.clear()
+
+    response = client.get("/informe/deadbeef", headers=auth)
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Servicio de revocación no disponible"
 
 
 def test_invalid_password_is_rejected(client):
