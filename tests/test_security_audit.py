@@ -121,9 +121,7 @@ def test_missing_security_checkpoint_fails_closed(audit_env):
         security_audit.verify_security_audit()
 
 
-def test_checkpoint_cannot_live_inside_security_log_directory(
-    audit_env, monkeypatch
-):
+def test_checkpoint_cannot_live_inside_security_log_directory(audit_env, monkeypatch):
     log_dir = Path(os.environ["SECURITY_AUDIT_DIR"])
     monkeypatch.setenv(
         "SECURITY_AUDIT_STATE_DB",
