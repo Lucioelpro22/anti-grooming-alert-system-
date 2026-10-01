@@ -11,7 +11,6 @@ from api.jwt_key_management import (
     load_jwt_keyring,
 )
 
-
 LEGACY = (
     "legacy-secret-that-is-longer-than-thirty-two-bytes"  # pragma: allowlist secret
 )
