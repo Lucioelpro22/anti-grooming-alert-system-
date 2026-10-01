@@ -110,9 +110,19 @@ The repository includes a multi-stage `Dockerfile` and
 `compose.production.yml` intended as a secure baseline for one API worker per
 container.
 
-The image uses a fixed Python patch release, runs as UID/GID `10001`, disables
-Uvicorn's native proxy-header rewriting, removes the default Uvicorn server
-header, and runs the production preflight before starting the server.
+The image uses a digest-pinned Python patch release, runs as UID/GID `10001`,
+disables Uvicorn's native proxy-header rewriting, removes the default Uvicorn
+server header, and runs the production preflight before starting the server.
+Application code, scripts, and the virtual environment are root-owned and made
+non-writable before switching to UID 10001, so the runtime account cannot modify
+the executable application even when the image is started without Compose.
+
+The build does not run mutable `apt-get upgrade` or `pip install --upgrade pip`
+steps. Python installation is restricted to binary wheels with
+`PIP_ONLY_BINARY=:all:`, reducing execution of third-party source build hooks.
+Base-image security updates are therefore applied deliberately by changing the
+digest (Dependabot watches Docker dependencies) rather than silently changing a
+build under the same Dockerfile.
 
 The production Compose profile applies:
 
@@ -149,14 +159,26 @@ for UID/GID `10001` instead.
 ### Container supply chain
 
 `.github/workflows/container-security.yml` builds the image for every PR/main
-security change, verifies the runtime UID, generates an SPDX JSON SBOM, and runs
-Trivy against HIGH/CRITICAL vulnerabilities. The SBOM is retained as a CI
-artifact.
+security change and verifies runtime invariants, including UID/GID, entrypoint,
+SIGTERM handling, readiness healthcheck, OCI revision metadata, absence of pip in
+the runtime image, and non-writability of application code by UID 10001. It then
+generates an SPDX JSON SBOM and runs Trivy against HIGH/CRITICAL vulnerabilities.
+The SBOM is retained as a CI artifact.
 
-`.github/workflows/container-release.yml` is intentionally manual. When
-invoked with a release tag it publishes to GHCR with BuildKit SBOM/provenance
-enabled and creates a GitHub build-provenance attestation. No container is
-published automatically from ordinary pushes or pull requests.
+`.dockerignore` excludes secrets, environment files, databases, private-key and
+certificate formats, test output, build output, and other material that should
+never enter the Docker build context.
+
+`.github/workflows/container-release.yml` is intentionally manual and accepts
+releases only when the workflow is dispatched from `main`. Before publication it
+builds a release candidate and blocks on a HIGH/CRITICAL Trivy scan. Published
+GHCR tags are treated as immutable: if the requested tag already exists, the
+release aborts instead of overwriting it.
+
+The release image carries OCI source/revision/version labels, uses the scanned
+candidate cache, enables BuildKit SBOM and maximum provenance, and receives a
+GitHub build-provenance attestation. Ordinary pushes and pull requests never
+publish container images.
 
 ## Authentication and MFA
 
