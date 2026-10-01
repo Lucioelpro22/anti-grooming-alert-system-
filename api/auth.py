@@ -25,6 +25,12 @@ from api.jwt_key_management import (
     jwt_key_for,
 )
 from api.key_management import current_key, load_keyring
+from api.mfa import (
+    MFABackendUnavailable,
+    MFAConfigurationError,
+    validate_mfa_configuration,
+    verify_mfa,
+)
 from api.pseudonymization import pseudonymization_key
 from api.session_management import (
     InvalidRefreshToken,
@@ -156,6 +162,12 @@ def validate_configuration() -> None:
     users = load_users()
     if not users or not any(not user.disabled for user in users.values()):
         raise RuntimeError("Debe configurar al menos un usuario activo")
+    validate_mfa_configuration(
+        {
+            username: (user.role.value, user.disabled)
+            for username, user in users.items()
+        }
+    )
     validate_encryption_keys()
 
 
@@ -167,6 +179,16 @@ def authenticate_user(username: str, password: str) -> StoredUser | None:
     if not PASSWORD_HASH.verify(password, user.password_hash):
         return None
     return user
+
+
+def authenticate_mfa(user: StoredUser, code: str | None) -> bool:
+    try:
+        return verify_mfa(user.username, user.role.value, code)
+    except (MFAConfigurationError, MFABackendUnavailable) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio MFA no disponible",
+        ) from exc
 
 
 def create_access_token(
