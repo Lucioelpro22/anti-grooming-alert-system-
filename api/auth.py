@@ -202,11 +202,7 @@ def decode_access_token(token: str) -> User:
         raw_key_id = header.get("kid")
         if raw_key_id is None:
             key_id = "legacy"
-        elif (
-            not isinstance(raw_key_id, str)
-            or not raw_key_id
-            or len(raw_key_id) > 64
-        ):
+        elif not isinstance(raw_key_id, str) or not raw_key_id or len(raw_key_id) > 64:
             raise InvalidTokenError
         else:
             key_id = raw_key_id
