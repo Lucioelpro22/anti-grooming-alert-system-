@@ -169,6 +169,16 @@ def test_bad_mfa_code_does_not_issue_tokens(mfa_client):
     assert "refresh_token" not in response.text
 
 
+def test_repeated_mfa_failures_share_login_rate_limit(mfa_client):
+    for _ in range(5):
+        response = login(mfa_client, "admin", mfa_code="000000")
+        assert response.status_code == 401
+
+    blocked = login(mfa_client, "admin", mfa_code="000000")
+    assert blocked.status_code == 429
+    assert int(blocked.headers["retry-after"]) >= 1
+
+
 def test_mfa_configuration_requires_active_sensitive_users():
     with pytest.raises(MFAConfigurationError):
         validate_mfa_configuration({"admin": ("admin", False)})
