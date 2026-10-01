@@ -46,6 +46,9 @@ jobs:
           load: true
           push: false
           tags: anti-grooming-alert-system:ci
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
@@ -59,6 +62,7 @@ jobs:
           test "$(docker image inspect "$image" --format '{{.Config.User}}')" = "10001:10001"
           test "$(docker image inspect "$image" --format '{{json .Config.Entrypoint}}')" = '["/bin/sh","/app/scripts/container-entrypoint.sh"]'
           test "$(docker image inspect "$image" --format '{{.Config.StopSignal}}')" = "SIGTERM"
+          test "$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "${GITHUB_SHA}"
           docker image inspect "$image" --format '{{json .Config.Healthcheck.Test}}' | grep -q '/health/ready'
           docker run --rm --entrypoint /usr/bin/id "$image" -u | grep -qx '10001'
           docker run --rm --entrypoint /bin/sh "$image" -ec '
