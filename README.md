@@ -122,6 +122,28 @@ producción con varios workers debe usarse `SESSION_BACKEND=redis` con
 falla cerrada. `REFRESH_TOKEN_DAYS` controla la vida máxima del refresh entre
 1 y 30 días y vale 7 por defecto.
 
+### Rate limiting distribuido de login y MFA
+
+Los fallos de contraseña y de MFA comparten el mismo límite de autenticación.
+El contador se asocia a una referencia opaca derivada de cliente + usuario, por
+lo que las claves Redis no exponen directamente la IP ni el nombre de usuario.
+
+`LOGIN_RATE_LIMIT_ATTEMPTS` define cuántos fallos se permiten dentro de
+`LOGIN_RATE_LIMIT_WINDOW_SECONDS` (5 intentos en 300 segundos por defecto).
+Un login válido limpia el contador correspondiente; los intentos exitosos no se
+cuentan como fallos.
+
+`LOGIN_RATE_LIMIT_BACKEND=memory` es adecuado para desarrollo o un único
+proceso. En producción con varios workers debe usarse
+`LOGIN_RATE_LIMIT_BACKEND=redis` junto con `REDIS_URL`; todos los workers
+comparten así el mismo contador y no es posible repartir intentos entre procesos
+para evadir el límite.
+
+Si Redis no puede consultarse, el login falla cerrado con 503 y la bitácora de
+seguridad registra `auth_backend_error` con severidad `critical`. Un bloqueo
+real por exceso de fallos devuelve 429 con `Retry-After` y se registra por
+separado como `login_rate_limited`.
+
 ### MFA/2FA para roles sensibles
 
 Por defecto, las cuentas con rol `admin`, `supervisor` y `auditor` deben
@@ -287,8 +309,9 @@ firma entradas futuras; no modifica ni resigna entradas anteriores.
 Los estados de evidencia se cambian mediante `PATCH /informe/{id}/estado` y
 requieren rol `admin` o `supervisor`. Un informe en `LEGAL_HOLD` no puede pasar a
 eliminación. Para despliegues con varios workers, definí `RATE_LIMIT_BACKEND=redis`,
-`TOKEN_REVOCATION_BACKEND=redis`, `SESSION_BACKEND=redis`,
-`MFA_STATE_BACKEND=redis` y `REDIS_URL`; si Redis no responde, los controles
+`LOGIN_RATE_LIMIT_BACKEND=redis`, `TOKEN_REVOCATION_BACKEND=redis`,
+`SESSION_BACKEND=redis`, `MFA_STATE_BACKEND=redis` y `REDIS_URL`; si Redis
+no responde, los controles
 distribuidos fallan cerrados. Para persistencia
 centralizada, configurá un `DATABASE_URL` PostgreSQL y desplegá explícitamente el
 repositorio SQLAlchemy; la aplicación no migra ni cambia de almacenamiento sola.
