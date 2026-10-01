@@ -1,8 +1,9 @@
-"""Distributed login/MFA failure rate limiting."""
+"""Distributed login/MFA failure rate limiting and stuffing defenses."""
 
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import threading
 import time
@@ -28,91 +29,169 @@ class LoginRateLimitDecision:
     retry_after: int
 
 
+@dataclass(frozen=True)
+class LoginRateLimitPolicy:
+    attempts: int
+    window_seconds: int
+    backoff_base_seconds: int
+    backoff_max_seconds: int
+
+
+@dataclass
+class _MemoryState:
+    count: int
+    window_started: float
+    penalty_level: int
+    block_until: float
+
+
 class LoginRateLimitBackend(Protocol):
     def check(
-        self, key: str, attempts: int, window_seconds: int
+        self, key: str, policy: LoginRateLimitPolicy
     ) -> LoginRateLimitDecision: ...
 
-    def failure(self, key: str, attempts: int, window_seconds: int) -> None: ...
+    def failure(self, key: str, policy: LoginRateLimitPolicy) -> None: ...
 
     def success(self, key: str) -> None: ...
 
 
-def opaque_login_key(client: str, username: str) -> str:
-    normalized = f"{client.strip().lower()}:{username.strip().lower()}"
+def opaque_scope_key(scope: str, value: str) -> str:
+    normalized = f"{scope.strip().lower()}:{value.strip().lower()}"
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-class MemoryLoginRateLimitBackend:
-    """Single-process limiter that counts only failed logins."""
+def opaque_login_key(client: str, username: str) -> str:
+    return opaque_scope_key(
+        "pair",
+        f"{client.strip().lower()}:{username.strip().lower()}",
+    )
 
-    def __init__(self, max_keys: int = 10_000) -> None:
+
+class MemoryLoginRateLimitBackend:
+    """Single-process multi-scope limiter with progressive backoff."""
+
+    def __init__(self, max_keys: int = 20_000) -> None:
         if max_keys <= 0:
             raise ValueError("max_keys must be greater than zero")
         self.max_keys = max_keys
-        self._failures: dict[str, list[float]] = {}
+        self._states: dict[str, _MemoryState] = {}
         self._lock = threading.Lock()
 
-    def _recent(self, key: str, window_seconds: int) -> list[float]:
-        cutoff = time.monotonic() - window_seconds
-        return [value for value in self._failures.get(key, []) if value > cutoff]
+    @staticmethod
+    def _expired(
+        state: _MemoryState,
+        policy: LoginRateLimitPolicy,
+        now: float,
+    ) -> bool:
+        return (
+            now - state.window_started >= policy.window_seconds
+            and now >= state.block_until
+        )
 
-    def _prune(self, window_seconds: int) -> None:
-        cutoff = time.monotonic() - window_seconds
+    def _prune(self, policy: LoginRateLimitPolicy, now: float) -> None:
         stale = [
             key
-            for key, values in self._failures.items()
-            if not values or values[-1] <= cutoff
+            for key, state in self._states.items()
+            if self._expired(state, policy, now)
         ]
         for key in stale:
-            self._failures.pop(key, None)
+            self._states.pop(key, None)
 
     def check(
-        self, key: str, attempts: int, window_seconds: int
+        self, key: str, policy: LoginRateLimitPolicy
     ) -> LoginRateLimitDecision:
+        now = time.monotonic()
         with self._lock:
-            recent = self._recent(key, window_seconds)
-            if recent:
-                self._failures[key] = recent
-            else:
-                self._failures.pop(key, None)
-            if len(recent) >= attempts:
-                retry_after = max(
-                    1,
-                    int(window_seconds - (time.monotonic() - recent[0])),
+            state = self._states.get(key)
+            if state is None:
+                return LoginRateLimitDecision(True, 0)
+            if self._expired(state, policy, now):
+                self._states.pop(key, None)
+                return LoginRateLimitDecision(True, 0)
+            if state.block_until > now:
+                return LoginRateLimitDecision(
+                    False,
+                    max(1, math.ceil(state.block_until - now)),
                 )
-                return LoginRateLimitDecision(False, retry_after)
             return LoginRateLimitDecision(True, 0)
 
-    def failure(self, key: str, attempts: int, window_seconds: int) -> None:
-        del attempts
+    def failure(self, key: str, policy: LoginRateLimitPolicy) -> None:
+        now = time.monotonic()
         with self._lock:
-            recent = self._recent(key, window_seconds)
-            if key not in self._failures and len(self._failures) >= self.max_keys:
-                self._prune(window_seconds)
-                if len(self._failures) >= self.max_keys:
-                    raise LoginRateLimitCapacityExceeded(
-                        "Login rate-limit store is at capacity"
-                    )
-            recent.append(time.monotonic())
-            self._failures[key] = recent
+            state = self._states.get(key)
+            if state is not None and self._expired(state, policy, now):
+                self._states.pop(key, None)
+                state = None
+
+            if state is None:
+                if len(self._states) >= self.max_keys:
+                    self._prune(policy, now)
+                    if len(self._states) >= self.max_keys:
+                        raise LoginRateLimitCapacityExceeded(
+                            "Login rate-limit store is at capacity"
+                        )
+                state = _MemoryState(
+                    count=0,
+                    window_started=now,
+                    penalty_level=0,
+                    block_until=0.0,
+                )
+                self._states[key] = state
+
+            state.count += 1
+            if state.count >= policy.attempts:
+                state.penalty_level += 1
+                delay = min(
+                    policy.backoff_max_seconds,
+                    policy.backoff_base_seconds
+                    * (2 ** (state.penalty_level - 1)),
+                )
+                state.block_until = max(state.block_until, now + delay)
 
     def success(self, key: str) -> None:
         with self._lock:
-            self._failures.pop(key, None)
+            self._states.pop(key, None)
 
     def clear(self) -> None:
         with self._lock:
-            self._failures.clear()
+            self._states.clear()
 
 
 class RedisLoginRateLimitBackend:
-    """Shared failed-login counter for multi-worker deployments."""
+    """Shared multi-scope limiter with Redis-time progressive backoff."""
+
+    _CHECK_SCRIPT = """
+local now_parts = redis.call('TIME')
+local now = tonumber(now_parts[1])
+local block_until = tonumber(redis.call('HGET', KEYS[1], 'block_until') or '0')
+if block_until > now then
+  return {0, block_until - now}
+end
+return {1, 0}
+"""
 
     _FAILURE_SCRIPT = """
-local count = redis.call('INCR', KEYS[1])
-if count == 1 then
-  redis.call('EXPIRE', KEYS[1], ARGV[1])
+local now_parts = redis.call('TIME')
+local now = tonumber(now_parts[1])
+local count = redis.call('HINCRBY', KEYS[1], 'count', 1)
+local ttl = redis.call('TTL', KEYS[1])
+if count == 1 or ttl < 0 then
+  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+end
+
+if count >= tonumber(ARGV[1]) then
+  local level = redis.call('HINCRBY', KEYS[1], 'level', 1)
+  local delay = tonumber(ARGV[3]) * (2 ^ (level - 1))
+  local max_delay = tonumber(ARGV[4])
+  if delay > max_delay then
+    delay = max_delay
+  end
+  local block_until = now + delay
+  redis.call('HSET', KEYS[1], 'block_until', block_until)
+  ttl = redis.call('TTL', KEYS[1])
+  if ttl < delay then
+    redis.call('EXPIRE', KEYS[1], delay)
+  end
 end
 return count
 """
@@ -120,7 +199,7 @@ return count
     def __init__(
         self,
         client: Any,
-        namespace: str = "anti-grooming:login-ratelimit:v1",
+        namespace: str = "anti-grooming:login-ratelimit:v2",
     ) -> None:
         self.client = client
         self.namespace = namespace
@@ -129,32 +208,28 @@ return count
         return f"{self.namespace}:{key}"
 
     def check(
-        self, key: str, attempts: int, window_seconds: int
+        self, key: str, policy: LoginRateLimitPolicy
     ) -> LoginRateLimitDecision:
-        redis_key = self._key(key)
-        pipeline = self.client.pipeline(transaction=True)
-        pipeline.get(redis_key)
-        pipeline.ttl(redis_key)
-        raw_count, raw_ttl = pipeline.execute()
-        count = int(raw_count or 0)
-        ttl = int(raw_ttl)
-        if count <= 0:
-            return LoginRateLimitDecision(True, 0)
-        if ttl <= 0:
-            raise LoginRateLimitBackendUnavailable(
-                "Contador Redis de login sin expiración válida"
-            )
-        if count >= attempts:
-            return LoginRateLimitDecision(False, min(ttl, window_seconds))
-        return LoginRateLimitDecision(True, 0)
+        result = self.client.eval(
+            self._CHECK_SCRIPT,
+            1,
+            self._key(key),
+        )
+        allowed, retry_after = int(result[0]), int(result[1])
+        return LoginRateLimitDecision(
+            allowed=bool(allowed),
+            retry_after=max(0, min(retry_after, policy.backoff_max_seconds)),
+        )
 
-    def failure(self, key: str, attempts: int, window_seconds: int) -> None:
-        del attempts
+    def failure(self, key: str, policy: LoginRateLimitPolicy) -> None:
         self.client.eval(
             self._FAILURE_SCRIPT,
             1,
             self._key(key),
-            window_seconds,
+            policy.attempts,
+            policy.window_seconds,
+            policy.backoff_base_seconds,
+            policy.backoff_max_seconds,
         )
 
     def success(self, key: str) -> None:
@@ -162,18 +237,12 @@ return count
 
 
 class LoginRateLimitStore:
-    """Select memory or Redis failed-login state and fail closed on outages."""
+    """Select memory or Redis rate-limit state and expose scope policies."""
 
-    def __init__(self, max_memory_keys: int = 10_000) -> None:
+    def __init__(self, max_memory_keys: int = 20_000) -> None:
         self._memory = MemoryLoginRateLimitBackend(max_memory_keys)
         self._redis_backend: RedisLoginRateLimitBackend | None = None
         self._redis_url: str | None = None
-
-    def attempts(self) -> int:
-        return self._positive_int("LOGIN_RATE_LIMIT_ATTEMPTS", 5)
-
-    def window_seconds(self) -> int:
-        return self._positive_int("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 300)
 
     @staticmethod
     def _positive_int(name: str, default: int) -> int:
@@ -186,6 +255,44 @@ class LoginRateLimitStore:
             raise LoginRateLimitConfigurationError(f"{name} debe ser mayor que cero")
         return value
 
+    def backoff_base_seconds(self) -> int:
+        return self._positive_int("LOGIN_BACKOFF_BASE_SECONDS", 30)
+
+    def backoff_max_seconds(self) -> int:
+        value = self._positive_int("LOGIN_BACKOFF_MAX_SECONDS", 900)
+        if value < self.backoff_base_seconds():
+            raise LoginRateLimitConfigurationError(
+                "LOGIN_BACKOFF_MAX_SECONDS debe ser >= LOGIN_BACKOFF_BASE_SECONDS"
+            )
+        return value
+
+    def policy(self, scope: str) -> LoginRateLimitPolicy:
+        base = self.backoff_base_seconds()
+        maximum = self.backoff_max_seconds()
+        if scope == "pair":
+            attempts = self._positive_int(
+                "LOGIN_PAIR_ATTEMPTS",
+                self._positive_int("LOGIN_RATE_LIMIT_ATTEMPTS", 5),
+            )
+            window = self._positive_int(
+                "LOGIN_PAIR_WINDOW_SECONDS",
+                self._positive_int("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 300),
+            )
+        elif scope == "account":
+            attempts = self._positive_int("LOGIN_ACCOUNT_ATTEMPTS", 10)
+            window = self._positive_int("LOGIN_ACCOUNT_WINDOW_SECONDS", 900)
+        elif scope == "client":
+            attempts = self._positive_int("LOGIN_CLIENT_ATTEMPTS", 20)
+            window = self._positive_int("LOGIN_CLIENT_WINDOW_SECONDS", 300)
+        else:
+            raise LoginRateLimitConfigurationError("Scope de login inválido")
+        return LoginRateLimitPolicy(
+            attempts=attempts,
+            window_seconds=window,
+            backoff_base_seconds=base,
+            backoff_max_seconds=maximum,
+        )
+
     def validate_configuration(self) -> None:
         mode = os.getenv("LOGIN_RATE_LIMIT_BACKEND", "memory").strip().lower()
         if mode not in {"memory", "redis"}:
@@ -196,8 +303,8 @@ class LoginRateLimitStore:
             raise LoginRateLimitConfigurationError(
                 "REDIS_URL es obligatorio cuando LOGIN_RATE_LIMIT_BACKEND=redis"
             )
-        self.attempts()
-        self.window_seconds()
+        for scope in ("pair", "account", "client"):
+            self.policy(scope)
 
     def _selected_backend(self) -> LoginRateLimitBackend:
         mode = os.getenv("LOGIN_RATE_LIMIT_BACKEND", "memory").strip().lower()
@@ -226,13 +333,13 @@ class LoginRateLimitStore:
             self._redis_url = url
         return self._redis_backend
 
-    def check(self, key: str) -> LoginRateLimitDecision:
+    def check(
+        self,
+        key: str,
+        policy: LoginRateLimitPolicy,
+    ) -> LoginRateLimitDecision:
         try:
-            return self._selected_backend().check(
-                key,
-                self.attempts(),
-                self.window_seconds(),
-            )
+            return self._selected_backend().check(key, policy)
         except (
             LoginRateLimitBackendUnavailable,
             LoginRateLimitCapacityExceeded,
@@ -243,13 +350,9 @@ class LoginRateLimitStore:
                 "Rate limit de login no disponible"
             ) from exc
 
-    def failure(self, key: str) -> None:
+    def failure(self, key: str, policy: LoginRateLimitPolicy) -> None:
         try:
-            self._selected_backend().failure(
-                key,
-                self.attempts(),
-                self.window_seconds(),
-            )
+            self._selected_backend().failure(key, policy)
         except (
             LoginRateLimitBackendUnavailable,
             LoginRateLimitCapacityExceeded,
