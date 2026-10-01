@@ -79,7 +79,7 @@ def test_container_release_is_scanned_main_only_and_tag_immutable():
         encoding="utf-8"
     )
 
-    assert "Require main branch" in workflow
+    assert "Validate release request" in workflow
     assert 'test "${GITHUB_REF}" = "refs/heads/main"' in workflow
     assert "Build and scan before publish" in workflow
     assert "Scan release candidate" in workflow
