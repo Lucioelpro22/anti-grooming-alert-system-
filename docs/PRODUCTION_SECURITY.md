@@ -117,12 +117,18 @@ Application code, scripts, and the virtual environment are root-owned and made
 non-writable before switching to UID 10001, so the runtime account cannot modify
 the executable application even when the image is started without Compose.
 
-The build does not run mutable `apt-get upgrade` or `pip install --upgrade pip`
-steps. Python installation is restricted to binary wheels with
-`PIP_ONLY_BINARY=:all:`, reducing execution of third-party source build hooks.
-Base-image security updates are therefore applied deliberately by changing the
-digest (Dependabot watches Docker dependencies) rather than silently changing a
-build under the same Dockerfile.
+The build does not run mutable `apt-get upgrade` or
+`pip install --upgrade pip` steps. Python installation is restricted to binary
+wheels with `PIP_ONLY_BINARY=:all:`, reducing execution of third-party source
+build hooks.
+
+If Trivy identifies a fixed HIGH/CRITICAL issue in a base OS package before an
+updated Python base digest is available, the Dockerfile may pin only the exact
+Debian security revisions required to close that finding. Those versions are
+explicit build arguments; if the repository can no longer supply them, the build
+fails rather than silently selecting a different release. Broader base-image
+updates are still applied deliberately through digest changes, which Dependabot
+monitors.
 
 The production Compose profile applies:
 
