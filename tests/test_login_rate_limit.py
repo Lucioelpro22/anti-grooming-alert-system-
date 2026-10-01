@@ -146,3 +146,11 @@ def test_invalid_login_rate_limit_configuration_is_rejected(
 
     with pytest.raises(RuntimeError):
         LoginRateLimitStore().validate_configuration()
+
+
+def test_redis_mode_requires_redis_url(monkeypatch):
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_BACKEND", "redis")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+    with pytest.raises(RuntimeError):
+        LoginRateLimitStore().validate_configuration()
