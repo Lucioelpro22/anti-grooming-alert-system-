@@ -28,8 +28,7 @@ def load_audit_keyring() -> dict[str, bytes]:
             if not isinstance(parsed, dict) or not parsed:
                 raise ValueError
             keyring = {
-                str(version): _decode(str(value))
-                for version, value in parsed.items()
+                str(version): _decode(str(value)) for version, value in parsed.items()
             }
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             raise EvidenceSecurityError("AUDIT_HMAC_KEYS_JSON inválido") from exc
