@@ -19,6 +19,7 @@ from api.auth import (
     create_access_token,
     get_current_user,
     require_roles,
+    revoke_access_token,
     validate_configuration,
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
@@ -123,6 +124,12 @@ def login(
     LOGIN_LIMITER.success(request, form.username)
     token, expires_in = create_access_token(user)
     return TokenResponse(access_token=token, expires_in=expires_in)
+
+
+@app.post("/logout")
+def logout(user: Annotated[User, Depends(get_current_user)]):
+    revoke_access_token(user)
+    return {"estado": "sesión revocada"}
 
 
 @app.post("/analizar-mensaje", response_model=AnalisisRespuesta)
