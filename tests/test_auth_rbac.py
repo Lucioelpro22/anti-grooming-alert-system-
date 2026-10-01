@@ -534,6 +534,50 @@ def test_login_rate_limit(client):
     assert response.status_code == 429
 
 
+def test_successful_login_resets_failed_login_counter(client):
+    for _ in range(4):
+        response = client.post(
+            "/token",
+            data={
+                "username": "analyst-a",
+                "password": "wrong",  # pragma: allowlist secret
+            },
+        )
+        assert response.status_code == 401
+
+    assert token_pair(client, "analyst-a")["access_token"]
+
+    response = client.post(
+        "/token",
+        data={
+            "username": "analyst-a",
+            "password": "wrong",  # pragma: allowlist secret
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_login_rate_limit_backend_outage_fails_closed_and_is_audited(
+    client, monkeypatch
+):
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_BACKEND", "redis")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    LOGIN_LIMITER.clear()
+
+    response = client.post(
+        "/token",
+        data={"username": "analyst-a", "password": PASSWORD},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Rate limit de autenticación no disponible"
+
+    events = security_audit.read_security_events()
+    event = events[-1]
+    assert event["event"] == "auth_backend_error"
+    assert event["severity"] == "critical"
+    assert event["reason"] == "login_rate_limit_backend"
+
+
 def test_extra_message_fields_are_rejected(client):
     payload = message_payload() | {"unexpected": "value"}
     response = client.post(
