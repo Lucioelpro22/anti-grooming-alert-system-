@@ -12,6 +12,11 @@ def test_dockerfile_runs_as_non_root_and_disables_uvicorn_proxy_headers():
     assert len(digest) == 64
     assert all(character in "0123456789abcdef" for character in digest)
     assert "USER 10001:10001" in dockerfile
+    assert "apt-get upgrade" not in dockerfile
+    assert "COPY --chown=0:0 api /app/api" in dockerfile
+    assert "COPY --chown=0:0 scripts /app/scripts" in dockerfile
+    assert "chmod -R a-w /app/api /app/scripts /opt/venv" in dockerfile
+    assert "STOPSIGNAL SIGTERM" in dockerfile
     assert "--no-proxy-headers" in Path("scripts/container-entrypoint.sh").read_text(
         encoding="utf-8"
     )
@@ -35,3 +40,23 @@ def test_production_compose_enforces_runtime_isolation():
     assert "/run/secrets/" in compose
     assert "/var/run/docker.sock" not in compose
     assert "privileged: true" not in compose
+
+
+def test_docker_context_excludes_sensitive_material():
+    dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
+
+    for pattern in (
+        ".env",
+        ".env.*",
+        "secrets/",
+        "*.pem",
+        "*.key",
+        "*.crt",
+        "*.p12",
+        "*.pfx",
+        "*.sqlite",
+        "*.sqlite3",
+        "tests/",
+        "docs/",
+    ):
+        assert pattern in dockerignore
