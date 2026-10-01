@@ -71,7 +71,13 @@ def _validate_hosts() -> None:
         )
     for host in hosts:
         normalized = host.lower()
-        if "*" in normalized or _is_loopback(normalized):
+        if (
+            "*" in normalized
+            or "://" in normalized
+            or "/" in normalized
+            or any(char.isspace() for char in normalized)
+            or _is_loopback(normalized)
+        ):
             raise ProductionSecurityError(
                 "ALLOWED_HOSTS_JSON contiene un host inseguro para producción"
             )
@@ -92,6 +98,7 @@ def _validate_origins() -> None:
             or parsed.password
             or parsed.query
             or parsed.fragment
+            or parsed.path not in {"", "/"}
             or _is_loopback(parsed.hostname)
         ):
             raise ProductionSecurityError(
