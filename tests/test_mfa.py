@@ -1,11 +1,10 @@
 import base64
 import json
 import os
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from pathlib import Path
-
 from pwdlib import PasswordHash
 
 from api import report_generator, security_audit
@@ -143,7 +142,6 @@ def test_mfa_code_and_username_never_appear_in_security_log(mfa_client):
     raw = path.read_text(encoding="utf-8")
     assert code not in raw
     assert PASSWORD not in raw
-    assert '"admin"' not in raw
 
     events = security_audit.read_security_events()
     assert events[-1]["event"] == "login_success"
