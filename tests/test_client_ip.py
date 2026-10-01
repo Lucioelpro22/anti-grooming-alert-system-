@@ -20,6 +20,19 @@ def _headers(**values):
     ]
 
 
+def test_ipv4_mapped_proxy_address_matches_ipv4_trusted_cidr(monkeypatch):
+    monkeypatch.setenv("CLIENT_IP_HEADER", "x-forwarded-for")
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS_JSON", '["10.0.0.0/8"]')
+
+    result = resolve_client_ip(
+        "::ffff:10.0.0.5",
+        _headers(x_forwarded_for="198.51.100.12"),
+    )
+
+    assert result.address == "198.51.100.12"
+    assert result.trusted_proxy is True
+
+
 def test_forwarding_headers_are_ignored_from_untrusted_peer(monkeypatch):
     monkeypatch.setenv("CLIENT_IP_HEADER", "x-forwarded-for")
     monkeypatch.setenv("TRUSTED_PROXY_CIDRS_JSON", '["10.0.0.0/8"]')
