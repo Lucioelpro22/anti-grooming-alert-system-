@@ -256,8 +256,10 @@ class MFAStateStore:
 MFA_STATE = MFAStateStore()
 
 
-def validate_mfa_configuration(users: dict[str, str]) -> None:
-    """Validate MFA policy against active users at startup."""
+def validate_mfa_configuration(
+    users: dict[str, tuple[str, bool]],
+) -> None:
+    """Validate MFA policy against configured users at startup."""
 
     MFA_STATE.validate_configuration()
     required = _required_roles()
@@ -269,8 +271,8 @@ def validate_mfa_configuration(users: dict[str, str]) -> None:
 
     missing = [
         username
-        for username, role in users.items()
-        if role in required and username not in configs
+        for username, (role, disabled) in users.items()
+        if not disabled and role in required and username not in configs
     ]
     if missing:
         raise MFAConfigurationError(
