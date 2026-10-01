@@ -246,6 +246,16 @@ class LoginRateLimitStore:
             raise LoginRateLimitConfigurationError(f"{name} debe ser mayor que cero")
         return value
 
+    def _positive_int_with_legacy(
+        self,
+        primary: str,
+        legacy: str,
+        default: int,
+    ) -> int:
+        if os.getenv(primary) is not None:
+            return self._positive_int(primary, default)
+        return self._positive_int(legacy, default)
+
     def backoff_base_seconds(self) -> int:
         return self._positive_int("LOGIN_BACKOFF_BASE_SECONDS", 30)
 
@@ -261,13 +271,15 @@ class LoginRateLimitStore:
         base = self.backoff_base_seconds()
         maximum = self.backoff_max_seconds()
         if scope == "pair":
-            attempts = self._positive_int(
+            attempts = self._positive_int_with_legacy(
                 "LOGIN_PAIR_ATTEMPTS",
-                self._positive_int("LOGIN_RATE_LIMIT_ATTEMPTS", 5),
+                "LOGIN_RATE_LIMIT_ATTEMPTS",
+                5,
             )
-            window = self._positive_int(
+            window = self._positive_int_with_legacy(
                 "LOGIN_PAIR_WINDOW_SECONDS",
-                self._positive_int("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 300),
+                "LOGIN_RATE_LIMIT_WINDOW_SECONDS",
+                300,
             )
         elif scope == "account":
             attempts = self._positive_int("LOGIN_ACCOUNT_ATTEMPTS", 10)
