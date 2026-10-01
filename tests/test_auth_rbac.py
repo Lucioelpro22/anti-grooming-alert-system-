@@ -747,6 +747,16 @@ def test_missing_evidence_key_fails_closed(client, monkeypatch):
     assert response.status_code == 503
 
 
+def test_liveness_and_readiness_are_healthy_after_startup(client):
+    live = client.get("/health/live")
+    ready = client.get("/health/ready")
+
+    assert live.status_code == 200
+    assert live.json() == {"status": "ok"}
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ready"}
+
+
 def test_security_headers_are_added(client):
     response = client.get("/estado")
     assert response.headers["x-content-type-options"] == "nosniff"
