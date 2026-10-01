@@ -3,6 +3,7 @@ import json
 import pytest
 
 from api.jwt_key_management import (
+    BLACKLISTED_JWT_SECRETS,
     JWTKeyConfigurationError,
     JWTKeyNotFound,
     current_jwt_key,
@@ -11,8 +12,12 @@ from api.jwt_key_management import (
 )
 
 
-LEGACY = "legacy-secret-that-is-longer-than-thirty-two-bytes"  # pragma: allowlist secret
-ROTATED = "rotated-secret-that-is-longer-than-thirty-two-bytes"  # pragma: allowlist secret
+LEGACY = (
+    "legacy-secret-that-is-longer-than-thirty-two-bytes"  # pragma: allowlist secret
+)
+ROTATED = (
+    "rotated-secret-that-is-longer-than-thirty-two-bytes"  # pragma: allowlist secret
+)
 
 
 def test_legacy_single_secret_configuration(monkeypatch):
@@ -80,22 +85,17 @@ def test_current_key_id_must_exist(monkeypatch):
         current_jwt_key()
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
-        json.dumps({"v2": 1234567890123456789012345678901234567890}),
-        json.dumps(
-            {
-                "v2": (
-                    "INSECURE_EXAMPLE_DO_NOT_USE_IN_PRODUCTION_"
-                    "GENERATE_NEW_SECRET_WITH_OPENSSL"
-                )
-            }
-        ),
-    ],
-)
-def test_non_string_or_example_jwt_secrets_are_rejected(monkeypatch, raw):
+def test_non_string_jwt_secret_is_rejected(monkeypatch):
+    raw = json.dumps({"v2": 1234567890123456789012345678901234567890})
     monkeypatch.setenv("JWT_SECRETS_JSON", raw)
+
+    with pytest.raises(JWTKeyConfigurationError):
+        load_jwt_keyring()
+
+
+def test_example_jwt_secret_is_rejected(monkeypatch):
+    example = next(iter(BLACKLISTED_JWT_SECRETS))
+    monkeypatch.setenv("JWT_SECRETS_JSON", json.dumps({"v2": example}))
 
     with pytest.raises(JWTKeyConfigurationError):
         load_jwt_keyring()
