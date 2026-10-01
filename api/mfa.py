@@ -383,8 +383,9 @@ def verify_mfa(username: str, role: str, code: str | None) -> bool:
     if not matched:
         return False
     # Stable across salted rehashes and duplicate entries for the same code.
-    # HMAC avoids storing a fast, unkeyed recovery-code hash in Redis.
-    consumption_id = hmac.new(
-        config.secret, normalized.encode("ascii"), hashlib.sha256
-    ).hexdigest()
+    # A secret per-account salt and slow KDF keep the Redis marker opaque without
+    # retaining a fast password hash. The salt survives Argon2 rehashes.
+    consumption_id = hashlib.pbkdf2_hmac(
+        "sha256", normalized.encode("ascii"), config.secret, 600_000
+    ).hex()
     return MFA_STATE.consume_recovery(normalized_username, consumption_id)
