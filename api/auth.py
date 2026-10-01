@@ -26,6 +26,13 @@ from api.jwt_key_management import (
 )
 from api.key_management import current_key, load_keyring
 from api.pseudonymization import pseudonymization_key
+from api.session_management import (
+    InvalidRefreshToken,
+    RefreshReuseDetected,
+    SessionBackendUnavailable,
+    SessionCapacityExceeded,
+    SessionStore,
+)
 from api.token_revocation import (
     RevocationBackendUnavailable,
     RevocationCapacityExceeded,
@@ -62,6 +69,7 @@ JWT_ISSUER = "anti-grooming-alert-system"
 JWT_AUDIENCE = "anti-grooming-api"
 ACCESS_TOKEN_MINUTES = 15
 TOKEN_REVOCATIONS = TokenRevocationStore()
+SESSIONS = SessionStore()
 
 # Known example/placeholder values that must never be used in production
 BLACKLISTED_PASSWORD_HASHES = {
@@ -143,6 +151,7 @@ def validate_encryption_keys() -> None:
 
 def validate_configuration() -> None:
     TOKEN_REVOCATIONS.validate_configuration()
+    SESSIONS.validate_configuration()
     _jwt_secret()
     users = load_users()
     if not users or not any(not user.disabled for user in users.values()):
@@ -160,7 +169,17 @@ def authenticate_user(username: str, password: str) -> StoredUser | None:
     return user
 
 
-def create_access_token(user: User) -> tuple[str, int]:
+def create_access_token(
+    user: User, session_version: int | None = None
+) -> tuple[str, int]:
+    if session_version is None:
+        try:
+            session_version = SESSIONS.current_version(user.username)
+        except SessionBackendUnavailable as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Servicio de sesiones no disponible",
+            ) from exc
     now = datetime.now(timezone.utc)
     expires = now + timedelta(minutes=ACCESS_TOKEN_MINUTES)
     payload = {
@@ -170,6 +189,7 @@ def create_access_token(user: User) -> tuple[str, int]:
         "nbf": now,
         "exp": expires,
         "jti": str(uuid.uuid4()),
+        "sv": session_version,
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
     }
@@ -221,6 +241,7 @@ def decode_access_token(token: str) -> User:
         username = payload.get("sub")
         token_id = payload.get("jti")
         expires_at = payload.get("exp")
+        raw_session_version = payload.get("sv", 0)
         role = Role(payload.get("role"))
         if (
             not isinstance(username, str)
@@ -230,7 +251,19 @@ def decode_access_token(token: str) -> User:
             or len(token_id) > 128
             or not isinstance(expires_at, (int, float))
             or isinstance(expires_at, bool)
+            or not isinstance(raw_session_version, int)
+            or isinstance(raw_session_version, bool)
+            or raw_session_version < 0
         ):
+            raise InvalidTokenError
+        try:
+            current_session_version = SESSIONS.current_version(username)
+        except SessionBackendUnavailable as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Servicio de sesiones no disponible",
+            ) from exc
+        if raw_session_version != current_session_version:
             raise InvalidTokenError
         try:
             revoked = TOKEN_REVOCATIONS.is_revoked(token_id)
@@ -258,6 +291,71 @@ def decode_access_token(token: str) -> User:
         token_id=token_id,
         token_expires_at=float(expires_at),
     )
+
+
+def create_refresh_session(user: User) -> tuple[str, int, int]:
+    try:
+        result = SESSIONS.issue(user.username, user.role.value)
+    except (SessionBackendUnavailable, SessionCapacityExceeded) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio de sesiones no disponible",
+        ) from exc
+    return result.refresh_token, result.refresh_expires_in, result.session_version
+
+
+def rotate_refresh_session(refresh_token: str) -> tuple[User, str, int, int]:
+    try:
+        result = SESSIONS.rotate(refresh_token)
+    except RefreshReuseDetected as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token reutilizado; sesiones revocadas",
+        ) from exc
+    except InvalidRefreshToken as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido",
+        ) from exc
+    except (SessionBackendUnavailable, SessionCapacityExceeded) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio de sesiones no disponible",
+        ) from exc
+
+    stored = load_users().get(result.username)
+    try:
+        role = Role(result.role)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión inválida",
+        ) from exc
+    if stored is None or stored.disabled or stored.role != role:
+        try:
+            SESSIONS.logout_all(result.username)
+        except SessionBackendUnavailable:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión inválida",
+        )
+    return (
+        User(username=stored.username, role=stored.role),
+        result.refresh_token,
+        result.refresh_expires_in,
+        result.session_version,
+    )
+
+
+def revoke_all_user_sessions(user: User) -> None:
+    try:
+        SESSIONS.logout_all(user.username)
+    except SessionBackendUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio de sesiones no disponible",
+        ) from exc
 
 
 def revoke_access_token(user: User) -> None:
