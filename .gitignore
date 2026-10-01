@@ -10,3 +10,6 @@ informes_generados/
 .env.*
 !.env.example
 secrets/
+mfa-users.json
+enrollment.txt
+recovery-codes.txt
