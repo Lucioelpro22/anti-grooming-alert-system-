@@ -122,6 +122,40 @@ producción con varios workers debe usarse `SESSION_BACKEND=redis` con
 falla cerrada. `REFRESH_TOKEN_DAYS` controla la vida máxima del refresh entre
 1 y 30 días y vale 7 por defecto.
 
+### MFA/2FA para roles sensibles
+
+Por defecto, las cuentas con rol `admin`, `supervisor` y `auditor` deben
+completar un segundo factor al iniciar sesión. El login acepta `mfa_code` en el
+mismo formulario OAuth2: puede ser un código TOTP de 6 dígitos o un código de
+recuperación de un solo uso.
+
+El TOTP implementa RFC 6238 con período de 30 segundos, secreto Base32 de al menos
+160 bits y una ventana temporal limitada. El backend registra el último contador
+aceptado por usuario, por lo que el mismo TOTP no puede reutilizarse dentro de su
+ventana.
+
+Los códigos de recuperación se generan con alta entropía y solo se guardan como
+hash SHA-256 en `MFA_USERS_JSON`. Cada código válido puede consumirse una sola
+vez. Para generar el material de enrolamiento:
+
+`python scripts/generate_mfa.py --username admin`
+
+El comando muestra el secreto Base32, una URI `otpauth://` compatible con
+aplicaciones autenticadoras y ocho códigos de recuperación. Guardá los códigos
+en un lugar separado y seguro; el repositorio solo debe recibir sus hashes dentro
+de la configuración.
+
+`MFA_REQUIRED_ROLES_JSON` controla qué roles exigen MFA. El valor recomendado y
+predeterminado es `["admin","supervisor","auditor"]`. Si un usuario de uno de
+esos roles está activo pero no tiene entrada válida en `MFA_USERS_JSON`, la API
+no inicia.
+
+`MFA_STATE_BACKEND=memory` sirve para desarrollo o un solo proceso. En producción
+multi-worker debe usarse `MFA_STATE_BACKEND=redis` con `REDIS_URL` para que la
+protección contra replay y el consumo de recovery codes sean compartidos. Si ese
+estado no puede consultarse, la autenticación falla cerrada.
+
+
 Los informes se almacenan cifrados con AES-256-GCM. Sus metadatos están
 autenticados y cada creación, lectura o acceso denegado se registra en una
 cadena de auditoría firmada con HMAC-SHA256. Las escrituras son atómicas y el
@@ -224,7 +258,8 @@ firma entradas futuras; no modifica ni resigna entradas anteriores.
 Los estados de evidencia se cambian mediante `PATCH /informe/{id}/estado` y
 requieren rol `admin` o `supervisor`. Un informe en `LEGAL_HOLD` no puede pasar a
 eliminación. Para despliegues con varios workers, definí `RATE_LIMIT_BACKEND=redis`,
-`TOKEN_REVOCATION_BACKEND=redis`, `SESSION_BACKEND=redis` y `REDIS_URL`;
-si Redis no responde, los controles distribuidos fallan cerrados. Para persistencia
+`TOKEN_REVOCATION_BACKEND=redis`, `SESSION_BACKEND=redis`,
+`MFA_STATE_BACKEND=redis` y `REDIS_URL`; si Redis no responde, los controles
+distribuidos fallan cerrados. Para persistencia
 centralizada, configurá un `DATABASE_URL` PostgreSQL y desplegá explícitamente el
 repositorio SQLAlchemy; la aplicación no migra ni cambia de almacenamiento sola.

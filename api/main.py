@@ -5,7 +5,7 @@ from enum import Enum
 from ipaddress import IPv4Address, IPv6Address
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ from api.auth import (
     LOGIN_LIMITER,
     Role,
     User,
+    authenticate_mfa,
     authenticate_user,
     create_access_token,
     create_refresh_session,
@@ -120,14 +121,15 @@ class EstadoInforme(BaseModel):
 def login(
     request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
+    mfa_code: Annotated[str | None, Form()] = None,
 ):
     LOGIN_LIMITER.check(request, form.username)
     user = authenticate_user(form.username, form.password)
-    if user is None:
+    if user is None or not authenticate_mfa(user, mfa_code):
         LOGIN_LIMITER.failure(request, form.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario o contraseña inválidos",
+            detail="Usuario, contraseña o MFA inválidos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     LOGIN_LIMITER.success(request, form.username)
