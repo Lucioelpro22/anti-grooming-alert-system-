@@ -62,6 +62,9 @@ def mfa_client(monkeypatch, tmp_path):
     monkeypatch.setenv("MFA_REQUIRED_ROLES_JSON", '["admin"]')
     monkeypatch.setenv("MFA_USERS_JSON", json.dumps(mfa_users))
     monkeypatch.setenv("MFA_STATE_BACKEND", "memory")
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_ATTEMPTS", "5")
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "300")
     monkeypatch.setenv("SESSION_BACKEND", "memory")
     monkeypatch.setenv("TOKEN_REVOCATION_BACKEND", "memory")
     monkeypatch.setenv("REFRESH_TOKEN_DAYS", "7")
@@ -91,7 +94,7 @@ def mfa_client(monkeypatch, tmp_path):
     )
 
     REPORT_LIMITER.clear()
-    LOGIN_LIMITER._failures.clear()
+    LOGIN_LIMITER.clear()
     API_LIMITER.clear()
     TOKEN_REVOCATIONS.clear()
     SESSIONS.clear()
