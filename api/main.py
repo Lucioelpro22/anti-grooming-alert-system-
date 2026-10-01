@@ -17,9 +17,12 @@ from api.auth import (
     User,
     authenticate_user,
     create_access_token,
+    create_refresh_session,
     get_current_user,
     require_roles,
     revoke_access_token,
+    revoke_all_user_sessions,
+    rotate_refresh_session,
     validate_configuration,
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
@@ -99,8 +102,14 @@ class AnalisisRespuesta(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    refresh_expires_in: int
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=32, max_length=256)
 
 
 class EstadoInforme(BaseModel):
@@ -122,14 +131,40 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     LOGIN_LIMITER.success(request, form.username)
-    token, expires_in = create_access_token(user)
-    return TokenResponse(access_token=token, expires_in=expires_in)
+    refresh_token, refresh_expires_in, session_version = create_refresh_session(user)
+    access_token, expires_in = create_access_token(user, session_version)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=expires_in,
+        refresh_expires_in=refresh_expires_in,
+    )
+
+
+@app.post("/token/refresh", response_model=TokenResponse)
+def refresh_token(payload: RefreshTokenRequest):
+    user, next_refresh, refresh_expires_in, session_version = rotate_refresh_session(
+        payload.refresh_token
+    )
+    access_token, expires_in = create_access_token(user, session_version)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=next_refresh,
+        expires_in=expires_in,
+        refresh_expires_in=refresh_expires_in,
+    )
 
 
 @app.post("/logout")
 def logout(user: Annotated[User, Depends(get_current_user)]):
     revoke_access_token(user)
     return {"estado": "sesión revocada"}
+
+
+@app.post("/logout-all")
+def logout_all(user: Annotated[User, Depends(get_current_user)]):
+    revoke_all_user_sessions(user)
+    return {"estado": "todas las sesiones revocadas"}
 
 
 @app.post("/analizar-mensaje", response_model=AnalisisRespuesta)

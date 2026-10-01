@@ -100,6 +100,28 @@ En rotaciones posteriores, agregá un nuevo ID, cambialo en
 `JWT_CURRENT_KEY_ID` y conservá temporalmente las claves anteriores hasta que
 caduquen todos los tokens firmados con ellas.
 
+### Sesiones y refresh tokens de un solo uso
+
+El login entrega un access token de corta duración y un refresh token opaco.
+El refresh token contiene 256 bits de aleatoriedad y el servidor almacena
+únicamente su hash SHA-256. Cada uso de `POST /token/refresh` consume el token
+anterior y entrega uno nuevo: un refresh token usado no vuelve a ser válido.
+
+Si un refresh token ya consumido aparece otra vez, se considera una posible
+reutilización/robo de sesión. El sistema incrementa la versión de sesión del
+usuario y revoca la familia completa: los access tokens y refresh tokens emitidos
+con la versión anterior dejan de ser aceptados.
+
+`POST /logout-all` aplica la misma invalidación global voluntariamente. Los
+access tokens incluyen una versión de sesión firmada (`sv`), por lo que no es
+necesario esperar sus 15 minutos de expiración para cerrar todas las sesiones.
+
+`SESSION_BACKEND=memory` está pensado para desarrollo o un único proceso. En
+producción con varios workers debe usarse `SESSION_BACKEND=redis` con
+`REDIS_URL`; si el backend compartido no puede consultarse, la autenticación
+falla cerrada. `REFRESH_TOKEN_DAYS` controla la vida máxima del refresh entre
+1 y 30 días y vale 7 por defecto.
+
 Los informes se almacenan cifrados con AES-256-GCM. Sus metadatos están
 autenticados y cada creación, lectura o acceso denegado se registra en una
 cadena de auditoría firmada con HMAC-SHA256. Las escrituras son atómicas y el
@@ -202,7 +224,7 @@ firma entradas futuras; no modifica ni resigna entradas anteriores.
 Los estados de evidencia se cambian mediante `PATCH /informe/{id}/estado` y
 requieren rol `admin` o `supervisor`. Un informe en `LEGAL_HOLD` no puede pasar a
 eliminación. Para despliegues con varios workers, definí `RATE_LIMIT_BACKEND=redis`,
-`TOKEN_REVOCATION_BACKEND=redis` y `REDIS_URL`; si Redis no responde, los
-controles distribuidos fallan cerrados. Para persistencia
+`TOKEN_REVOCATION_BACKEND=redis`, `SESSION_BACKEND=redis` y `REDIS_URL`;
+si Redis no responde, los controles distribuidos fallan cerrados. Para persistencia
 centralizada, configurá un `DATABASE_URL` PostgreSQL y desplegá explícitamente el
 repositorio SQLAlchemy; la aplicación no migra ni cambia de almacenamiento sola.
