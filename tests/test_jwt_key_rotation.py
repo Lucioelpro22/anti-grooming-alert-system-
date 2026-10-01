@@ -11,8 +11,8 @@ from api.jwt_key_management import (
 )
 
 
-LEGACY = "legacy-secret-that-is-longer-than-thirty-two-bytes"
-ROTATED = "rotated-secret-that-is-longer-than-thirty-two-bytes"
+LEGACY = "legacy-secret-that-is-longer-than-thirty-two-bytes"  # pragma: allowlist secret
+ROTATED = "rotated-secret-that-is-longer-than-thirty-two-bytes"  # pragma: allowlist secret
 
 
 def test_legacy_single_secret_configuration(monkeypatch):
