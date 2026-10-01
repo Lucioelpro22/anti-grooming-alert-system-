@@ -67,16 +67,22 @@ class SlidingWindowRateLimiter:
         self._requests: dict[str, list[float]] = {}
         self._lock = threading.Lock()
         self._distributed_backend: RedisRateLimitBackend | None = None
+        self._distributed_url: str | None = None
 
     def _redis_backend(self) -> RedisRateLimitBackend | None:
-        if os.getenv("RATE_LIMIT_BACKEND", "memory").lower() != "redis":
+        mode = os.getenv("RATE_LIMIT_BACKEND", "memory").strip().lower()
+        if mode == "memory":
             return None
+        if mode != "redis":
+            raise RateLimitBackendUnavailable(
+                "RATE_LIMIT_BACKEND debe ser 'memory' o 'redis'"
+            )
         url = os.getenv("REDIS_URL", "").strip()
         if not url:
             raise RateLimitBackendUnavailable(
                 "REDIS_URL requerido para rate limiting distribuido"
             )
-        if self._distributed_backend is None:
+        if self._distributed_backend is None or self._distributed_url != url:
             try:
                 validate_redis_url(url, production=is_production())
                 client = create_redis_client(url, production=is_production())
@@ -85,6 +91,7 @@ class SlidingWindowRateLimiter:
                     "Rate limit Redis no disponible"
                 ) from exc
             self._distributed_backend = RedisRateLimitBackend(client)
+            self._distributed_url = url
         return self._distributed_backend
 
     def check(self, key: str) -> RateLimitResult:
@@ -122,6 +129,8 @@ class SlidingWindowRateLimiter:
     def clear(self) -> None:
         with self._lock:
             self._requests.clear()
+        self._distributed_backend = None
+        self._distributed_url = None
 
 
 API_LIMITER = SlidingWindowRateLimiter()
