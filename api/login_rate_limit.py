@@ -195,9 +195,7 @@ return count
     def _key(self, key: str) -> str:
         return f"{self.namespace}:{key}"
 
-    def check(
-        self, key: str, policy: LoginRateLimitPolicy
-    ) -> LoginRateLimitDecision:
+    def check(self, key: str, policy: LoginRateLimitPolicy) -> LoginRateLimitDecision:
         result = self.client.eval(
             self._CHECK_SCRIPT,
             1,
