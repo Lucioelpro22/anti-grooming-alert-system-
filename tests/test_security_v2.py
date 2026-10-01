@@ -60,7 +60,8 @@ def test_profile_categories_are_neutral_and_require_human_review():
 
 
 def test_pseudonymization_is_stable_and_non_reversible(monkeypatch):
-    monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", "test-pseudonym-key")
+    key = base64.urlsafe_b64encode(b"p" * 32).decode()
+    monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", key)
     first = pseudonymize("external-user-123")
     assert first == pseudonymize(" external-user-123 ")
     assert first != "external-user-123"
