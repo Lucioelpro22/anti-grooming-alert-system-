@@ -66,6 +66,9 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("TOKEN_REVOCATION_BACKEND", "memory")
     monkeypatch.setenv("SESSION_BACKEND", "memory")
     monkeypatch.setenv("REFRESH_TOKEN_DAYS", "7")
+    monkeypatch.setenv("MFA_REQUIRED_ROLES_JSON", "[]")
+    monkeypatch.setenv("MFA_USERS_JSON", "{}")
+    monkeypatch.setenv("MFA_STATE_BACKEND", "memory")
     monkeypatch.delenv("REDIS_URL", raising=False)
     monkeypatch.setattr(report_generator, "CARPETA_INFORMES", tmp_path)
     monkeypatch.setenv(
