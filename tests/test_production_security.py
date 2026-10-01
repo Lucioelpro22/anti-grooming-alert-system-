@@ -82,8 +82,10 @@ def test_production_rejects_plaintext_redis(monkeypatch):
     [
         ("ALLOWED_HOSTS_JSON", '["*"]'),
         ("ALLOWED_HOSTS_JSON", '["localhost"]'),
+        ("ALLOWED_HOSTS_JSON", '["https://api.example.org"]'),
         ("ALLOWED_ORIGINS_JSON", '["http://app.example.org"]'),
         ("ALLOWED_ORIGINS_JSON", '["https://localhost"]'),
+        ("ALLOWED_ORIGINS_JSON", '["https://app.example.org/path"]'),
     ],
 )
 def test_production_rejects_unsafe_http_perimeter(monkeypatch, name, value):
