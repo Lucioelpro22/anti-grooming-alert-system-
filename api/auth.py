@@ -170,8 +170,8 @@ def validate_configuration() -> None:
     validate_mfa_configuration(
         {username: (user.role.value, user.disabled) for username, user in users.items()}
     )
-    validate_security_audit_configuration()
     validate_encryption_keys()
+    validate_security_audit_configuration()
 
 
 def authenticate_user(username: str, password: str) -> StoredUser | None:
