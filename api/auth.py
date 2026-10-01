@@ -452,7 +452,7 @@ class LoginRateLimiter:
         return opaque_login_key(client, username)
 
     @staticmethod
-    def _backend_unavailable(exc: Exception) -> HTTPException:
+    def _backend_unavailable() -> HTTPException:
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Rate limit de autenticación no disponible",
@@ -466,7 +466,7 @@ class LoginRateLimiter:
             LoginRateLimitCapacityExceeded,
             LoginRateLimitConfigurationError,
         ) as exc:
-            raise self._backend_unavailable(exc) from exc
+            raise self._backend_unavailable() from exc
         if not decision.allowed:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -482,7 +482,7 @@ class LoginRateLimiter:
             LoginRateLimitCapacityExceeded,
             LoginRateLimitConfigurationError,
         ) as exc:
-            raise self._backend_unavailable(exc) from exc
+            raise self._backend_unavailable() from exc
 
     def success(self, request: Request, username: str) -> None:
         try:
@@ -492,7 +492,7 @@ class LoginRateLimiter:
             LoginRateLimitCapacityExceeded,
             LoginRateLimitConfigurationError,
         ) as exc:
-            raise self._backend_unavailable(exc) from exc
+            raise self._backend_unavailable() from exc
 
     def clear(self) -> None:
         self._store.clear()
