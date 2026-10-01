@@ -68,6 +68,12 @@ La API usa OAuth2 con tokens JWT de corta duración, contraseñas Argon2 y roles
 `admin`, `analyst` y `auditor`. Los informes quedan vinculados a su creador; solo
 su propietario, un administrador o un auditor pueden consultarlos.
 
+`POST /logout` revoca inmediatamente el JWT actual hasta su expiración. El modo
+`memory` es seguro únicamente para un proceso; en despliegues con varios workers
+debe configurarse `TOKEN_REVOCATION_BACKEND=redis` junto con `REDIS_URL`.
+Si el backend distribuido de revocación no está disponible, la validación de
+tokens falla cerrada en lugar de aceptar un JWT cuya revocación no pueda comprobarse.
+
 Los informes se almacenan cifrados con AES-256-GCM. Sus metadatos están
 autenticados y cada creación, lectura o acceso denegado se registra en una
 cadena de auditoría firmada con HMAC-SHA256. Las escrituras son atómicas y el
@@ -140,7 +146,8 @@ requiere protección adicional, como un registro externo inmutable.
 
 Los estados de evidencia se cambian mediante `PATCH /informe/{id}/estado` y
 requieren rol `admin` o `supervisor`. Un informe en `LEGAL_HOLD` no puede pasar a
-eliminación. Para despliegues con varios workers, definí `RATE_LIMIT_BACKEND=redis`
-y `REDIS_URL`; si Redis no responde, el límite falla cerrado. Para persistencia
+eliminación. Para despliegues con varios workers, definí `RATE_LIMIT_BACKEND=redis`,
+`TOKEN_REVOCATION_BACKEND=redis` y `REDIS_URL`; si Redis no responde, los
+controles distribuidos fallan cerrados. Para persistencia
 centralizada, configurá un `DATABASE_URL` PostgreSQL y desplegá explícitamente el
 repositorio SQLAlchemy; la aplicación no migra ni cambia de almacenamiento sola.
