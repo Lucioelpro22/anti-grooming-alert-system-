@@ -1,0 +1,86 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: anti-grooming-alert-system:local
+    user: "10001:10001"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "127.0.0.1:8000:8000"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1700
+    environment:
+      APP_ENV: production
+      PORT: "8000"
+      HEALTHCHECK_HOST: ${HEALTHCHECK_HOST:?set HEALTHCHECK_HOST to an allowed API host}
+      ALLOWED_HOSTS_JSON: ${ALLOWED_HOSTS_JSON:?set exact production hosts}
+      ALLOWED_ORIGINS_JSON: ${ALLOWED_ORIGINS_JSON:-[]}
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-none}
+      TRUSTED_PROXY_CIDRS_JSON: ${TRUSTED_PROXY_CIDRS_JSON:-[]}
+      MAX_FORWARDED_HOPS: ${MAX_FORWARDED_HOPS:-10}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-65536}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-120}
+      API_RATE_WINDOW_SECONDS: ${API_RATE_WINDOW_SECONDS:-60}
+      RATE_LIMIT_BACKEND: redis
+      LOGIN_RATE_LIMIT_BACKEND: redis
+      TOKEN_REVOCATION_BACKEND: redis
+      SESSION_BACKEND: redis
+      MFA_STATE_BACKEND: redis
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-7}
+      MFA_REQUIRED_ROLES_JSON: '["admin","supervisor","auditor"]'
+      AUDIT_STATE_DB: /var/lib/anti-grooming-audit/checkpoint.sqlite
+      SECURITY_AUDIT_DIR: /var/log/anti-grooming-security
+      SECURITY_AUDIT_STATE_DB: /var/lib/anti-grooming-security/checkpoint.sqlite
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      AUTH_USERS_JSON_FILE: /run/secrets/auth_users_json
+      MFA_USERS_JSON_FILE: /run/secrets/mfa_users_json
+      EVIDENCE_ENCRYPTION_KEY_FILE: /run/secrets/evidence_encryption_key
+      AUDIT_HMAC_KEY_FILE: /run/secrets/audit_hmac_key
+      PSEUDONYMIZATION_HMAC_KEY_FILE: /run/secrets/pseudonymization_hmac_key
+      REDIS_URL_FILE: /run/secrets/redis_url
+    secrets:
+      - jwt_secret
+      - auth_users_json
+      - mfa_users_json
+      - evidence_encryption_key
+      - audit_hmac_key
+      - pseudonymization_hmac_key
+      - redis_url
+    volumes:
+      - evidence_data:/app/informes_generados
+      - evidence_audit_state:/var/lib/anti-grooming-audit
+      - security_audit_log:/var/log/anti-grooming-security
+      - security_audit_state:/var/lib/anti-grooming-security
+
+secrets:
+  jwt_secret:
+    file: ./secrets/jwt_secret
+  auth_users_json:
+    file: ./secrets/auth_users_json
+  mfa_users_json:
+    file: ./secrets/mfa_users_json
+  evidence_encryption_key:
+    file: ./secrets/evidence_encryption_key
+  audit_hmac_key:
+    file: ./secrets/audit_hmac_key
+  pseudonymization_hmac_key:
+    file: ./secrets/pseudonymization_hmac_key
+  redis_url:
+    file: ./secrets/redis_url
+
+volumes:
+  evidence_data:
+  evidence_audit_state:
+  security_audit_log:
+  security_audit_state:
