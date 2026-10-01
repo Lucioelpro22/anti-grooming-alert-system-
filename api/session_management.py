@@ -50,17 +50,13 @@ class _RefreshRecord:
 
 
 class SessionBackend(Protocol):
-    def issue(self, username: str, role: str, ttl_seconds: int) -> RefreshResult:
-        ...
+    def issue(self, username: str, role: str, ttl_seconds: int) -> RefreshResult: ...
 
-    def rotate(self, refresh_token: str, ttl_seconds: int) -> RefreshResult:
-        ...
+    def rotate(self, refresh_token: str, ttl_seconds: int) -> RefreshResult: ...
 
-    def current_version(self, username: str) -> int:
-        ...
+    def current_version(self, username: str) -> int: ...
 
-    def logout_all(self, username: str) -> int:
-        ...
+    def logout_all(self, username: str) -> int: ...
 
 
 def _digest(token: str) -> str:
@@ -84,7 +80,9 @@ class MemorySessionBackend:
 
     def _prune(self, now: float) -> None:
         expired = [
-            digest for digest, record in self._records.items() if record.expires_at <= now
+            digest
+            for digest, record in self._records.items()
+            if record.expires_at <= now
         ]
         for digest in expired:
             self._records.pop(digest, None)
@@ -167,7 +165,9 @@ class MemorySessionBackend:
 class RedisSessionBackend:
     """Shared session backend for multi-worker deployments."""
 
-    def __init__(self, client: Any, namespace: str = "anti-grooming:sessions:v1") -> None:
+    def __init__(
+        self, client: Any, namespace: str = "anti-grooming:sessions:v1"
+    ) -> None:
         self.client = client
         self.namespace = namespace
 
