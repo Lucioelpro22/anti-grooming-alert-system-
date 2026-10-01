@@ -19,7 +19,7 @@ BLACKLISTED_JWT_SECRETS = {
 
 
 def _validate_secret(raw: str) -> str:
-    secret = raw.strip()
+    secret = raw
     if len(secret) < 32:
         raise JWTKeyConfigurationError(
             "Las claves JWT deben tener al menos 32 caracteres"
@@ -36,10 +36,14 @@ def load_jwt_keyring() -> dict[str, str]:
     if raw_ring:
         try:
             parsed = json.loads(raw_ring)
-            if not isinstance(parsed, dict) or not parsed:
+            if (
+                not isinstance(parsed, dict)
+                or not parsed
+                or not all(isinstance(secret, str) for secret in parsed.values())
+            ):
                 raise ValueError
             keyring = {
-                str(key_id): _validate_secret(str(secret))
+                str(key_id): _validate_secret(secret)
                 for key_id, secret in parsed.items()
             }
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
