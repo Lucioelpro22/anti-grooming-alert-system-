@@ -7,13 +7,13 @@ FROM ${PYTHON_IMAGE} AS builder
 ENV VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_ONLY_BINARY=:all:
 
 RUN python -m venv "${VIRTUAL_ENV}"
 
 COPY api/requirements.txt /tmp/requirements.txt
-RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-compile -r /tmp/requirements.txt
+RUN python -m pip install --no-compile -r /tmp/requirements.txt
 
 FROM ${PYTHON_IMAGE} AS runtime
 
