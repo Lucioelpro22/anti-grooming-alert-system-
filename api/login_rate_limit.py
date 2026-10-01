@@ -40,7 +40,7 @@ class LoginRateLimitPolicy:
 @dataclass
 class _MemoryState:
     count: int
-    window_started: float
+    window_expires: float
     penalty_level: int
     block_until: float
 
@@ -78,21 +78,12 @@ class MemoryLoginRateLimitBackend:
         self._lock = threading.Lock()
 
     @staticmethod
-    def _expired(
-        state: _MemoryState,
-        policy: LoginRateLimitPolicy,
-        now: float,
-    ) -> bool:
-        return (
-            now - state.window_started >= policy.window_seconds
-            and now >= state.block_until
-        )
+    def _expired(state: _MemoryState, now: float) -> bool:
+        return now >= state.window_expires and now >= state.block_until
 
-    def _prune(self, policy: LoginRateLimitPolicy, now: float) -> None:
+    def _prune(self, now: float) -> None:
         stale = [
-            key
-            for key, state in self._states.items()
-            if self._expired(state, policy, now)
+            key for key, state in self._states.items() if self._expired(state, now)
         ]
         for key in stale:
             self._states.pop(key, None)
@@ -105,7 +96,7 @@ class MemoryLoginRateLimitBackend:
             state = self._states.get(key)
             if state is None:
                 return LoginRateLimitDecision(True, 0)
-            if self._expired(state, policy, now):
+            if self._expired(state, now):
                 self._states.pop(key, None)
                 return LoginRateLimitDecision(True, 0)
             if state.block_until > now:
@@ -119,20 +110,20 @@ class MemoryLoginRateLimitBackend:
         now = time.monotonic()
         with self._lock:
             state = self._states.get(key)
-            if state is not None and self._expired(state, policy, now):
+            if state is not None and self._expired(state, now):
                 self._states.pop(key, None)
                 state = None
 
             if state is None:
                 if len(self._states) >= self.max_keys:
-                    self._prune(policy, now)
+                    self._prune(now)
                     if len(self._states) >= self.max_keys:
                         raise LoginRateLimitCapacityExceeded(
                             "Login rate-limit store is at capacity"
                         )
                 state = _MemoryState(
                     count=0,
-                    window_started=now,
+                    window_expires=now + policy.window_seconds,
                     penalty_level=0,
                     block_until=0.0,
                 )
