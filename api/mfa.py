@@ -46,6 +46,8 @@ def _normalize_recovery_code(code: str) -> str:
 
 def recovery_code_hash(code: str) -> str:
     normalized = _normalize_recovery_code(code)
+    if not re.fullmatch(r"[A-Z0-9]{12,64}", normalized):
+        raise ValueError("Código de recuperación inválido")
     return hashlib.sha256(normalized.encode("ascii")).hexdigest()
 
 
@@ -323,7 +325,10 @@ def verify_mfa(username: str, role: str, code: str | None) -> bool:
             return False
         return MFA_STATE.consume_totp(normalized_username, matched_counter)
 
-    digest = recovery_code_hash(candidate)
+    try:
+        digest = recovery_code_hash(candidate)
+    except (UnicodeError, ValueError):
+        return False
     matched = any(
         hmac.compare_digest(digest, expected)
         for expected in config.recovery_code_hashes
