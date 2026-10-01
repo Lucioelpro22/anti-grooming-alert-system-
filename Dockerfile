@@ -17,6 +17,9 @@ RUN python -m pip install --no-compile -r /tmp/requirements.txt
 
 FROM ${PYTHON_IMAGE} AS runtime
 
+ARG PCRE2_SECURITY_VERSION=10.46-1~deb13u3
+ARG OPENSSL_SECURITY_VERSION=3.5.7-1~deb13u3
+
 ENV VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -26,6 +29,16 @@ ENV VIRTUAL_ENV=/opt/venv \
     HOME=/nonexistent \
     TMPDIR=/tmp \
     PORT=8000
+
+# Apply only the exact Debian security revisions required by the image scan.
+# This avoids an open-ended apt upgrade while keeping the runtime patched.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        "libpcre2-8-0=${PCRE2_SECURITY_VERSION}" \
+        "libssl3t64=${OPENSSL_SECURITY_VERSION}" \
+        "openssl=${OPENSSL_SECURITY_VERSION}" \
+        "openssl-provider-legacy=${OPENSSL_SECURITY_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --no-create-home \
