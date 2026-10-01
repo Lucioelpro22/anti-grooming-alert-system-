@@ -208,9 +208,7 @@ def test_pair_policy_keeps_legacy_environment_compatibility(monkeypatch):
         ("LOGIN_BACKOFF_BASE_SECONDS", "0"),
     ],
 )
-def test_invalid_login_rate_limit_configuration_is_rejected(
-    monkeypatch, name, value
-):
+def test_invalid_login_rate_limit_configuration_is_rejected(monkeypatch, name, value):
     monkeypatch.setenv(name, value)
 
     with pytest.raises(RuntimeError):
