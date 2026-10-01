@@ -124,25 +124,42 @@ falla cerrada. `REFRESH_TOKEN_DAYS` controla la vida máxima del refresh entre
 
 ### Rate limiting distribuido de login y MFA
 
-Los fallos de contraseña y de MFA comparten el mismo límite de autenticación.
-El contador se asocia a una referencia opaca derivada de cliente + usuario, por
-lo que las claves Redis no exponen directamente la IP ni el nombre de usuario.
+Los fallos de contraseña y de MFA se evalúan en tres dimensiones simultáneas,
+todas con claves opacas SHA-256 para no exponer IP ni nombre de usuario en Redis:
 
-`LOGIN_RATE_LIMIT_ATTEMPTS` define cuántos fallos se permiten dentro de
-`LOGIN_RATE_LIMIT_WINDOW_SECONDS` (5 intentos en 300 segundos por defecto).
-Un login válido limpia el contador correspondiente; los intentos exitosos no se
-cuentan como fallos.
+- **pair**: mismo cliente + misma cuenta, para fuerza bruta focalizada;
+- **account**: misma cuenta desde clientes distintos, para credential stuffing;
+- **client**: mismo cliente rotando cuentas, para password spraying.
+
+Los valores predeterminados son 5 fallos/300 s para `pair`, 10/900 s para
+`account` y 20/300 s para `client`. Se configuran con
+`LOGIN_PAIR_*`, `LOGIN_ACCOUNT_*` y `LOGIN_CLIENT_*`. Las variables antiguas
+`LOGIN_RATE_LIMIT_ATTEMPTS` y `LOGIN_RATE_LIMIT_WINDOW_SECONDS` siguen
+funcionando como fallback del scope `pair`.
+
+Cuando un scope alcanza su umbral, el bloqueo usa backoff progresivo: comienza en
+`LOGIN_BACKOFF_BASE_SECONDS` (30 s) y se duplica con reincidencias hasta
+`LOGIN_BACKOFF_MAX_SECONDS` (900 s). El cliente siempre recibe el mismo 429
+genérico con `Retry-After`; no se revela qué scope disparó la defensa.
+
+Un login válido limpia el estado de la cuenta y del par cliente+cuenta, pero no
+borra el historial global del cliente. Así una IP que está probando muchas
+cuentas no puede limpiar el patrón con un único acceso válido.
 
 `LOGIN_RATE_LIMIT_BACKEND=memory` es adecuado para desarrollo o un único
 proceso. En producción con varios workers debe usarse
 `LOGIN_RATE_LIMIT_BACKEND=redis` junto con `REDIS_URL`; todos los workers
-comparten así el mismo contador y no es posible repartir intentos entre procesos
-para evadir el límite.
+comparten el mismo estado y no es posible repartir intentos entre procesos.
+
+La respuesta de credenciales inválidas permanece genérica tanto para usuarios
+existentes como inexistentes, y las cuentas inexistentes pasan por una
+verificación Argon2 dummy para reducir account enumeration por diferencias de
+flujo. La bitácora interna distingue `credential_stuffing_suspected`,
+`password_spraying_suspected` y `login_rate_limited` sin exponer ese detalle
+al cliente.
 
 Si Redis no puede consultarse, el login falla cerrado con 503 y la bitácora de
-seguridad registra `auth_backend_error` con severidad `critical`. Un bloqueo
-real por exceso de fallos devuelve 429 con `Retry-After` y se registra por
-separado como `login_rate_limited`.
+seguridad registra `auth_backend_error` con severidad `critical`.
 
 ### MFA/2FA para roles sensibles
 
