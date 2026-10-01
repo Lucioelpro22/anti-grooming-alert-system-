@@ -11,8 +11,11 @@ from api import report_generator, security_audit
 from api.auth import LOGIN_LIMITER, SESSIONS, TOKEN_REVOCATIONS
 from api.mfa import (
     MFA_STATE,
+    RECOVERY_PASSWORD_HASH,
     MFAConfigurationError,
     MFAStateStore,
+    RedisMFAStateBackend,
+    load_mfa_configs,
     recovery_code_hash,
     totp_code,
     validate_mfa_configuration,
@@ -219,3 +222,80 @@ def test_mfa_redis_mode_requires_redis_url(monkeypatch):
 
     with pytest.raises(MFAConfigurationError):
         MFAStateStore().validate_configuration()
+
+
+def test_recovery_hash_is_salted_argon2id():
+    first = recovery_code_hash(RECOVERY_CODES[0])
+    second = recovery_code_hash(RECOVERY_CODES[0])
+    assert first.startswith("$argon2id$v=19$m=65536,t=3,p=4$")
+    assert first != second
+    assert RECOVERY_PASSWORD_HASH.verify(RECOVERY_CODES[0].replace("-", ""), first)
+
+
+def set_recovery_configuration(monkeypatch, hashes):
+    monkeypatch.setenv(
+        "MFA_USERS_JSON",
+        json.dumps(
+            {"admin": {"totp_secret": TOTP_SECRET, "recovery_code_hashes": hashes}}
+        ),
+    )
+    monkeypatch.setenv("MFA_REQUIRED_ROLES_JSON", '["admin"]')
+    monkeypatch.setenv("MFA_STATE_BACKEND", "memory")
+    MFA_STATE.clear()
+
+
+@pytest.mark.parametrize("hash_value", ["a" * 64, "$argon2id$invalid"])
+def test_legacy_or_malformed_recovery_hash_rejected(monkeypatch, hash_value):
+    hashes = [recovery_code_hash(code) for code in RECOVERY_CODES]
+    hashes[0] = hash_value
+    set_recovery_configuration(monkeypatch, hashes)
+    with pytest.raises(MFAConfigurationError):
+        load_mfa_configs()
+
+
+def test_recovery_hash_resource_limits_rejected(monkeypatch):
+    hashes = [recovery_code_hash(code) for code in RECOVERY_CODES]
+    hashes[0] = hashes[0].replace("m=65536", "m=999999999")
+    set_recovery_configuration(monkeypatch, hashes)
+    with pytest.raises(MFAConfigurationError):
+        load_mfa_configs()
+
+
+def test_salted_rehash_or_duplicate_cannot_reenable_consumed_code(monkeypatch):
+    hashes = [recovery_code_hash(code) for code in RECOVERY_CODES]
+    hashes.append(recovery_code_hash(RECOVERY_CODES[0]))
+    set_recovery_configuration(monkeypatch, hashes)
+    assert verify_mfa("admin", "admin", RECOVERY_CODES[0].lower().replace("-", " "))
+    assert not verify_mfa("admin", "admin", RECOVERY_CODES[0])
+    hashes[0] = recovery_code_hash(RECOVERY_CODES[0])
+    monkeypatch.setenv(
+        "MFA_USERS_JSON",
+        json.dumps(
+            {"admin": {"totp_secret": TOTP_SECRET, "recovery_code_hashes": hashes}}
+        ),
+    )
+    assert not verify_mfa("admin", "admin", RECOVERY_CODES[0])
+
+
+def test_recovery_consumption_shared_by_redis_workers(monkeypatch):
+    class SharedRedis:
+        def __init__(self):
+            self.used = set()
+
+        def sadd(self, key, member):
+            item = (key, member)
+            if item in self.used:
+                return 0
+            self.used.add(item)
+            return 1
+
+    hashes = [recovery_code_hash(code) for code in RECOVERY_CODES]
+    set_recovery_configuration(monkeypatch, hashes)
+    client = SharedRedis()
+    workers = [RedisMFAStateBackend(client), RedisMFAStateBackend(client)]
+    monkeypatch.setattr(MFA_STATE, "_selected_backend", lambda: workers[0])
+    assert verify_mfa("admin", "admin", RECOVERY_CODES[0])
+    monkeypatch.setattr(MFA_STATE, "_selected_backend", lambda: workers[1])
+    assert not verify_mfa("admin", "admin", RECOVERY_CODES[0])
+    assert RECOVERY_CODES[0] not in repr(client.used)
+    assert hashes[0] not in repr(client.used)

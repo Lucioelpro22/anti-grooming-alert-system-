@@ -15,6 +15,11 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from argon2 import extract_parameters
+from argon2.exceptions import InvalidHashError
+from argon2.low_level import Type
+from pwdlib import PasswordHash
+
 from api.production_security import is_production
 from api.redis_security import (
     RedisSecurityConfigurationError,
@@ -29,6 +34,9 @@ class MFAConfigurationError(RuntimeError):
 
 class MFABackendUnavailable(RuntimeError):
     """MFA replay/recovery state cannot be consulted safely."""
+
+
+RECOVERY_PASSWORD_HASH = PasswordHash.recommended()
 
 
 @dataclass(frozen=True)
@@ -55,7 +63,34 @@ def recovery_code_hash(code: str) -> str:
     normalized = _normalize_recovery_code(code)
     if not re.fullmatch(r"[A-Z0-9]{12,64}", normalized):
         raise ValueError("Código de recuperación inválido")
-    return hashlib.sha256(normalized.encode("ascii")).hexdigest()
+    return RECOVERY_PASSWORD_HASH.hash(normalized)
+
+
+def _validate_recovery_hash(value: str) -> None:
+    if not re.fullmatch(
+        r"\$argon2id\$v=19\$m=\d+,t=\d+,p=\d+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+",
+        value,
+    ):
+        raise MFAConfigurationError(
+            "Los códigos de recuperación requieren hashes Argon2id; renovar códigos antiguos"
+        )
+    try:
+        parameters = extract_parameters(value)
+    except (InvalidHashError, ValueError) as exc:
+        raise MFAConfigurationError(
+            "Los códigos de recuperación requieren hashes Argon2id; renovar códigos antiguos"
+        ) from exc
+    if (
+        parameters.type != Type.ID
+        or parameters.version != 19
+        or not 65_536 <= parameters.memory_cost <= 131_072
+        or not 3 <= parameters.time_cost <= 6
+        or not 1 <= parameters.parallelism <= 4
+        or not 16 <= parameters.salt_len <= 64
+        or not 32 <= parameters.hash_len <= 64
+        or len(value) > 512
+    ):
+        raise MFAConfigurationError("Parámetros de recuperación Argon2id inválidos")
 
 
 def _decode_totp_secret(raw: str) -> bytes:
@@ -110,17 +145,17 @@ def load_mfa_configs() -> dict[str, MFAConfig]:
         recovery_raw = raw_config.get("recovery_code_hashes")
         if not isinstance(secret_raw, str) or not isinstance(recovery_raw, list):
             raise MFAConfigurationError("MFA_USERS_JSON inválido")
-        if len(recovery_raw) < 4 or not all(
+        if not 4 <= len(recovery_raw) <= 16 or not all(
             isinstance(value, str) for value in recovery_raw
         ):
             raise MFAConfigurationError(
-                "Cada usuario MFA necesita al menos 4 códigos de recuperación"
+                "Cada usuario MFA necesita entre 4 y 16 códigos de recuperación"
             )
-        recovery_hashes = tuple(value.lower() for value in recovery_raw)
-        if len(set(recovery_hashes)) != len(recovery_hashes) or any(
-            not re.fullmatch(r"[0-9a-f]{64}", value) for value in recovery_hashes
-        ):
+        recovery_hashes = tuple(recovery_raw)
+        if len(set(recovery_hashes)) != len(recovery_hashes):
             raise MFAConfigurationError("Hashes de recuperación inválidos")
+        for value in recovery_hashes:
+            _validate_recovery_hash(value)
 
         configs[username] = MFAConfig(
             secret=_decode_totp_secret(secret_raw),
@@ -338,14 +373,19 @@ def verify_mfa(username: str, role: str, code: str | None) -> bool:
             return False
         return MFA_STATE.consume_totp(normalized_username, matched_counter)
 
-    try:
-        digest = recovery_code_hash(candidate)
-    except (UnicodeError, ValueError):
+    normalized = _normalize_recovery_code(candidate)
+    if not re.fullmatch(r"[A-Z0-9]{12,64}", normalized):
         return False
     matched = any(
-        hmac.compare_digest(digest, expected)
+        RECOVERY_PASSWORD_HASH.verify(normalized, expected)
         for expected in config.recovery_code_hashes
     )
     if not matched:
         return False
-    return MFA_STATE.consume_recovery(normalized_username, digest)
+    # Stable across salted rehashes and duplicate entries for the same code.
+    # A secret per-account salt and slow KDF keep the Redis marker opaque without
+    # retaining a fast password hash. The salt survives Argon2 rehashes.
+    consumption_id = hashlib.pbkdf2_hmac(
+        "sha256", normalized.encode("ascii"), config.secret, 600_000
+    ).hex()
+    return MFA_STATE.consume_recovery(normalized_username, consumption_id)

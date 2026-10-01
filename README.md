@@ -231,15 +231,25 @@ aceptado por usuario, por lo que el mismo TOTP no puede reutilizarse dentro de s
 ventana.
 
 Los códigos de recuperación se generan con alta entropía y solo se guardan como
-hash SHA-256 en `MFA_USERS_JSON`. Cada código válido puede consumirse una sola
+hash Argon2id con sal aleatoria en `MFA_USERS_JSON`. Cada código válido puede consumirse una sola
 vez. Para generar el material de enrolamiento:
 
-`python scripts/generate_mfa.py --username admin`
+`python -m scripts.generate_mfa --username admin --output-dir /ruta/privada/mfa-admin`
 
-El comando muestra el secreto Base32, una URI `otpauth://` compatible con
-aplicaciones autenticadoras y ocho códigos de recuperación. Guardá los códigos
-en un lugar separado y seguro; el repositorio solo debe recibir sus hashes dentro
-de la configuración.
+El comando crea un directorio nuevo con permisos `0700` y archivos `0600`:
+`mfa-users.json` para el gestor de secretos, `enrollment.txt` con el secreto Base32
+y URI `otpauth://`, y `recovery-codes.txt` con ocho códigos de recuperación.
+No imprime secretos en consola y no sobrescribe directorios existentes. Ejecutalo
+en un host POSIX, fuera del repositorio; guardá los códigos en un lugar seguro y
+separado de la configuración del servicio. El secreto TOTP debe permanecer en
+el gestor de secretos, nunca en Git ni en logs.
+
+Las configuraciones antiguas con hashes SHA-256 requieren renovar los códigos
+antes de desplegar esta versión; el arranque rechaza ese formato. Para conservar
+el autenticador existente, agregá `--totp-secret-file /ruta/privada/totp-secret`
+con el secreto Base32 actual en un archivo `0600`. Se generan códigos nuevos;
+no reutilices los anteriores ni borres el estado de consumo de Redis. Combiná
+las entradas de todas las cuentas en `MFA_USERS_JSON` o `MFA_USERS_JSON_FILE`.
 
 `MFA_REQUIRED_ROLES_JSON` controla qué roles exigen MFA. El valor recomendado y
 predeterminado es `["admin","supervisor","auditor"]`. Si un usuario de uno de
