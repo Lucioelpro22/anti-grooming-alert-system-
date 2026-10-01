@@ -17,3 +17,16 @@ venv/
 *.sqlite3
 tests/
 docs/
+.coverage
+htmlcov/
+build/
+dist/
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.kdbx
+*.bak
+*.tmp

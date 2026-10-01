@@ -7,15 +7,18 @@ FROM ${PYTHON_IMAGE} AS builder
 ENV VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_ONLY_BINARY=:all:
 
 RUN python -m venv "${VIRTUAL_ENV}"
 
 COPY api/requirements.txt /tmp/requirements.txt
-RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-compile -r /tmp/requirements.txt
+RUN python -m pip install --no-compile -r /tmp/requirements.txt
 
 FROM ${PYTHON_IMAGE} AS runtime
+
+ARG PCRE2_SECURITY_VERSION=10.46-1~deb13u3
+ARG OPENSSL_SECURITY_VERSION=3.5.7-1~deb13u3
 
 ENV VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
@@ -27,10 +30,17 @@ ENV VIRTUAL_ENV=/opt/venv \
     TMPDIR=/tmp \
     PORT=8000
 
+# Apply only the exact Debian security revisions required by the image scan.
+# This avoids an open-ended apt upgrade while keeping the runtime patched.
 RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 10001 app \
+    && apt-get install -y --no-install-recommends \
+        "libpcre2-8-0=${PCRE2_SECURITY_VERSION}" \
+        "libssl3t64=${OPENSSL_SECURITY_VERSION}" \
+        "openssl=${OPENSSL_SECURITY_VERSION}" \
+        "openssl-provider-legacy=${OPENSSL_SECURITY_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --no-create-home \
         --home-dir /nonexistent --shell /usr/sbin/nologin app \
     && mkdir -p \
@@ -47,8 +57,8 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=10001:10001 api /app/api
-COPY --chown=10001:10001 scripts /app/scripts
+COPY --chown=0:0 api /app/api
+COPY --chown=0:0 scripts /app/scripts
 
 # Package-management/build tooling is not needed by the running service.
 # Remove it from both the application venv and the base interpreter to reduce
@@ -56,11 +66,14 @@ COPY --chown=10001:10001 scripts /app/scripts
 RUN /opt/venv/bin/python -m pip uninstall -y setuptools urllib3 msgpack \
     && /opt/venv/bin/python -m pip uninstall -y pip \
     && /usr/local/bin/python -m pip uninstall -y setuptools urllib3 msgpack \
-    && /usr/local/bin/python -m pip uninstall -y pip
+    && /usr/local/bin/python -m pip uninstall -y pip \
+    && chmod -R a-w /app/api /app/scripts /opt/venv
 
 USER 10001:10001
 
 EXPOSE 8000
+
+STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import os,urllib.request; p=os.getenv('PORT','8000'); h=os.getenv('HEALTHCHECK_HOST','localhost'); r=urllib.request.Request(f'http://127.0.0.1:{p}/health/ready',headers={'Host':h}); urllib.request.urlopen(r,timeout=3).read()" || exit 1

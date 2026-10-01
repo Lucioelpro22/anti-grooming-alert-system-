@@ -91,10 +91,15 @@ health/readiness, usuario non-root fijo y root filesystem read-only en el perfil
 de producción. Uvicorn se inicia con `--no-proxy-headers` para que la única
 autoridad sobre IP real siga siendo el resolver de trusted proxies de la API.
 
-La CI construye y escanea la imagen, genera un SBOM SPDX y bloquea
-vulnerabilidades HIGH/CRITICAL corregibles. La publicación a GHCR queda en un
-workflow manual separado con SBOM, provenance y attestation; un push normal no
-publica imágenes.
+La CI construye y escanea la imagen, verifica que el runtime sea non-root y que
+el código no sea escribible por el usuario del proceso, genera un SBOM SPDX y
+bloquea vulnerabilidades HIGH/CRITICAL corregibles. El build evita upgrades
+mutables de sistema/pip y restringe las dependencias Python a wheels.
+
+La publicación a GHCR queda en un workflow manual separado: solo puede salir
+desde `main`, exige un scan previo, no permite sobrescribir un tag existente y
+publica OCI labels de commit junto con SBOM, provenance y attestation. Un push
+normal no publica imágenes.
 
 ➡️ [Hardening completo de runtime y producción](docs/PRODUCTION_SECURITY.md)
 
