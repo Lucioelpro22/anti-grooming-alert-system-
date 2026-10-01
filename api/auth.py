@@ -130,13 +130,15 @@ def load_users() -> dict[str, StoredUser]:
 
 
 def validate_encryption_keys() -> None:
-    _, evidence_key = current_key()
-    audit_key = _decode_key("AUDIT_HMAC_KEY")
+    current_key()
+    current_audit_key()
+    evidence_keys = set(load_keyring().values())
+    audit_keys = set(load_audit_keyring().values())
     try:
         pseudonym_key = pseudonymization_key()
     except RuntimeError as exc:
         raise EvidenceSecurityError("Clave de seudonimización inválida") from exc
-    if len({evidence_key, audit_key, pseudonym_key}) != 3:
+    if evidence_keys & audit_keys or pseudonym_key in evidence_keys | audit_keys:
         raise RuntimeError(
             "Las claves de cifrado, auditoría y seudonimización deben ser distintas"
         )
