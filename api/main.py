@@ -151,19 +151,38 @@ def login(
 ):
     try:
         LOGIN_LIMITER.check(request, form.username)
-    except HTTPException:
-        _record_security_event_or_503(
-            "login_rate_limited",
-            request=request,
-            username=form.username,
-            severity="warning",
-            reason="rate_limit",
-        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+            _record_security_event_or_503(
+                "login_rate_limited",
+                request=request,
+                username=form.username,
+                severity="warning",
+                reason="rate_limit",
+            )
+        else:
+            _record_security_event_or_503(
+                "auth_backend_error",
+                request=request,
+                username=form.username,
+                severity="critical",
+                reason="login_rate_limit_backend",
+            )
         raise
 
     user = authenticate_user(form.username, form.password)
     if user is None:
-        LOGIN_LIMITER.failure(request, form.username)
+        try:
+            LOGIN_LIMITER.failure(request, form.username)
+        except HTTPException:
+            _record_security_event_or_503(
+                "auth_backend_error",
+                request=request,
+                username=form.username,
+                severity="critical",
+                reason="login_rate_limit_backend",
+            )
+            raise
         _record_security_event_or_503(
             "login_failed",
             request=request,
@@ -191,7 +210,18 @@ def login(
         raise
 
     if not mfa_valid:
-        LOGIN_LIMITER.failure(request, form.username)
+        try:
+            LOGIN_LIMITER.failure(request, form.username)
+        except HTTPException:
+            _record_security_event_or_503(
+                "auth_backend_error",
+                request=request,
+                username=user.username,
+                role=user.role.value,
+                severity="critical",
+                reason="login_rate_limit_backend",
+            )
+            raise
         _record_security_event_or_503(
             "login_failed",
             request=request,
@@ -206,7 +236,19 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    LOGIN_LIMITER.success(request, form.username)
+    try:
+        LOGIN_LIMITER.success(request, form.username)
+    except HTTPException:
+        _record_security_event_or_503(
+            "auth_backend_error",
+            request=request,
+            username=user.username,
+            role=user.role.value,
+            severity="critical",
+            reason="login_rate_limit_backend",
+        )
+        raise
+
     try:
         refresh_token, refresh_expires_in, session_version = create_refresh_session(
             user

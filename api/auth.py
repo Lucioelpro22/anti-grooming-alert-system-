@@ -1,7 +1,5 @@
 import json
 import os
-import threading
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -25,6 +23,13 @@ from api.jwt_key_management import (
     jwt_key_for,
 )
 from api.key_management import current_key, load_keyring
+from api.login_rate_limit import (
+    LoginRateLimitBackendUnavailable,
+    LoginRateLimitCapacityExceeded,
+    LoginRateLimitConfigurationError,
+    LoginRateLimitStore,
+    opaque_login_key,
+)
 from api.mfa import (
     MFABackendUnavailable,
     MFAConfigurationError,
@@ -163,6 +168,7 @@ def validate_encryption_keys() -> None:
 def validate_configuration() -> None:
     TOKEN_REVOCATIONS.validate_configuration()
     SESSIONS.validate_configuration()
+    LOGIN_LIMITER.validate_configuration()
     _jwt_secret()
     users = load_users()
     if not users or not any(not user.disabled for user in users.values()):
@@ -432,44 +438,64 @@ def require_roles(*allowed: Role):
 
 
 class LoginRateLimiter:
-    def __init__(self, attempts: int = 5, window_seconds: int = 300) -> None:
-        self.attempts = attempts
-        self.window_seconds = window_seconds
-        self._failures: dict[str, list[float]] = {}
-        self._lock = threading.Lock()
+    def __init__(self) -> None:
+        self._store = LoginRateLimitStore()
+
+    def validate_configuration(self) -> None:
+        try:
+            self._store.validate_configuration()
+        except LoginRateLimitConfigurationError as exc:
+            raise RuntimeError("Configuración de rate limit de login inválida") from exc
 
     def _key(self, request: Request, username: str) -> str:
         client = request.client.host if request.client else "unknown"
-        return f"{client}:{username.strip().lower()}"
+        return opaque_login_key(client, username)
+
+    @staticmethod
+    def _backend_unavailable() -> HTTPException:
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Rate limit de autenticación no disponible",
+        )
 
     def check(self, request: Request, username: str) -> None:
-        key = self._key(request, username)
-        cutoff = time.monotonic() - self.window_seconds
-        with self._lock:
-            if len(self._failures) > 10_000 and key not in self._failures:
-                self._failures = {
-                    name: values
-                    for name, values in self._failures.items()
-                    if values and values[-1] > cutoff
-                }
-            recent = [value for value in self._failures.get(key, []) if value > cutoff]
-            self._failures[key] = recent
-            if len(recent) >= self.attempts:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Demasiados intentos; probá más tarde",
-                    headers={"Retry-After": str(self.window_seconds)},
-                )
+        try:
+            decision = self._store.check(self._key(request, username))
+        except (
+            LoginRateLimitBackendUnavailable,
+            LoginRateLimitCapacityExceeded,
+            LoginRateLimitConfigurationError,
+        ) as exc:
+            raise self._backend_unavailable() from exc
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Demasiados intentos; probá más tarde",
+                headers={"Retry-After": str(decision.retry_after)},
+            )
 
     def failure(self, request: Request, username: str) -> None:
-        key = self._key(request, username)
-        with self._lock:
-            self._failures.setdefault(key, []).append(time.monotonic())
+        try:
+            self._store.failure(self._key(request, username))
+        except (
+            LoginRateLimitBackendUnavailable,
+            LoginRateLimitCapacityExceeded,
+            LoginRateLimitConfigurationError,
+        ) as exc:
+            raise self._backend_unavailable() from exc
 
     def success(self, request: Request, username: str) -> None:
-        key = self._key(request, username)
-        with self._lock:
-            self._failures.pop(key, None)
+        try:
+            self._store.success(self._key(request, username))
+        except (
+            LoginRateLimitBackendUnavailable,
+            LoginRateLimitCapacityExceeded,
+            LoginRateLimitConfigurationError,
+        ) as exc:
+            raise self._backend_unavailable() from exc
+
+    def clear(self) -> None:
+        self._store.clear()
 
 
 LOGIN_LIMITER = LoginRateLimiter()
