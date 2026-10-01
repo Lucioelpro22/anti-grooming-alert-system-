@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG PYTHON_IMAGE=python:3.12.14-slim-bookworm
+ARG PYTHON_IMAGE=python:3.12.14-slim-trixie
 
 FROM ${PYTHON_IMAGE} AS builder
 
@@ -46,6 +46,14 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=10001:10001 api /app/api
 COPY --chown=10001:10001 scripts /app/scripts
+
+# Package-management/build tooling is not needed by the running service.
+# Remove it from both the application venv and the base interpreter to reduce
+# runtime attack surface and avoid carrying unrelated vulnerable packages.
+RUN /opt/venv/bin/python -m pip uninstall -y setuptools urllib3 msgpack \
+    && /opt/venv/bin/python -m pip uninstall -y pip \
+    && /usr/local/bin/python -m pip uninstall -y setuptools urllib3 msgpack \
+    && /usr/local/bin/python -m pip uninstall -y pip
 
 USER 10001:10001
 
