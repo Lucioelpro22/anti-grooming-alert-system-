@@ -110,9 +110,7 @@ class TokenRevocationStore:
     def validate_configuration(self) -> None:
         mode = os.getenv("TOKEN_REVOCATION_BACKEND", "memory").strip().lower()
         if mode not in {"memory", "redis"}:
-            raise RuntimeError(
-                "TOKEN_REVOCATION_BACKEND debe ser 'memory' o 'redis'"
-            )
+            raise RuntimeError("TOKEN_REVOCATION_BACKEND debe ser 'memory' o 'redis'")
         if mode == "redis" and not os.getenv("REDIS_URL", "").strip():
             raise RuntimeError(
                 "REDIS_URL es obligatorio cuando TOKEN_REVOCATION_BACKEND=redis"
@@ -123,9 +121,7 @@ class TokenRevocationStore:
         if mode == "memory":
             return self._memory
         if mode != "redis":
-            raise RevocationBackendUnavailable(
-                "Unsupported JWT revocation backend"
-            )
+            raise RevocationBackendUnavailable("Unsupported JWT revocation backend")
 
         url = os.getenv("REDIS_URL", "").strip()
         if not url:
