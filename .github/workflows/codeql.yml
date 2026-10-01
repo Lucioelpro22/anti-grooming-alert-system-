@@ -27,3 +27,31 @@ jobs:
           languages: python
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          output: codeql-results
+      - name: Block high and critical CodeQL findings
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          reports = list(Path("codeql-results").glob("*.sarif"))
+          if not reports:
+              raise SystemExit("CodeQL produced no SARIF reports")
+          findings = 0
+          for report in reports:
+              for run in json.loads(report.read_text())["runs"]:
+                  rules = {
+                      rule["id"]: rule
+                      for rule in run["tool"]["driver"].get("rules", [])
+                  }
+                  for result in run.get("results", []):
+                      rule = rules.get(result["ruleId"], {})
+                      severity = float(rule.get("properties", {}).get("security-severity", 0))
+                      if severity >= 7:
+                          findings += 1
+          print(f"CodeQL HIGH/CRITICAL findings: {findings}")
+          if findings:
+              raise SystemExit("High/critical CodeQL findings block integration")
+          PY
