@@ -144,6 +144,31 @@ La protección detecta cambios en los informes/auditoría mientras el checkpoint
 confiable. Un atacante que controle ambos destinos o el proceso con sus claves
 requiere protección adicional, como un registro externo inmutable.
 
+### Rotación de la clave HMAC de auditoría
+
+La cadena de auditoría admite un key-ring versionado sin volver a firmar el
+historial. Las entradas nuevas incluyen `audit_key_id`; las entradas históricas
+anteriores a este mecanismo se verifican con el ID reservado `legacy`.
+
+Para rotar desde una instalación que usa `AUDIT_HMAC_KEY`:
+
+1. Detené todos los workers y respaldá el historial, el checkpoint y la
+   configuración de claves.
+2. Conservá la clave actual: seguirá siendo necesaria para verificar las entradas
+   históricas. Generá una nueva con `python scripts/generate_audit_key.py`.
+3. Configurá `AUDIT_HMAC_KEYS_JSON` con la clave anterior bajo el ID literal
+   `legacy` y la nueva con un ID nuevo, por ejemplo
+   `{"legacy":"CLAVE_ANTERIOR","v2":"CLAVE_NUEVA"}`.
+4. Configurá `AUDIT_HMAC_CURRENT_KEY_ID=v2` y reiniciá el servicio.
+5. Verificá la cadena completa antes de reanudar operación. Las nuevas entradas
+   quedarán firmadas con `v2`, enlazadas al mismo `previous_hash` del historial.
+6. No elimines una clave histórica del key-ring mientras existan entradas firmadas
+   con ese ID. Si falta una clave requerida, la verificación falla cerrada.
+
+En rotaciones posteriores, conservá todos los IDs todavía referenciados por el
+historial y agregá el nuevo ID como clave activa. La rotación cambia la clave que
+firma entradas futuras; no modifica ni resigna entradas anteriores.
+
 ## Segunda etapa de operación
 
 Los estados de evidencia se cambian mediante `PATCH /informe/{id}/estado` y

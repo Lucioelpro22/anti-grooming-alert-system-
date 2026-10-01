@@ -119,6 +119,17 @@ def test_identical_keys_rejected(storage, monkeypatch):
         validate_encryption_keys()
 
 
+def test_historical_audit_key_cannot_reuse_evidence_key(storage, monkeypatch):
+    evidence_key = os.environ["EVIDENCE_ENCRYPTION_KEY"]
+    monkeypatch.setenv(
+        "AUDIT_HMAC_KEYS_JSON",
+        json.dumps({"legacy": os.environ["AUDIT_HMAC_KEY"], "v2": evidence_key}),
+    )
+    monkeypatch.setenv("AUDIT_HMAC_CURRENT_KEY_ID", "legacy")
+    with pytest.raises(RuntimeError):
+        validate_encryption_keys()
+
+
 @pytest.mark.parametrize("duplicate_of", ["EVIDENCE_ENCRYPTION_KEY", "AUDIT_HMAC_KEY"])
 def test_pseudonymization_key_must_be_independent(storage, monkeypatch, duplicate_of):
     monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", os.environ[duplicate_of])
