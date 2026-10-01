@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,7 @@ from api.client_ip import (
     resolve_client_ip,
     validate_client_ip_configuration,
 )
+from api.security import API_LIMITER, ApiShieldMiddleware
 
 
 def _headers(**values):
@@ -169,3 +171,54 @@ def test_request_client_ip_prefers_middleware_resolved_state():
     )
 
     assert request_client_ip(request) == "198.51.100.20"
+
+
+def test_api_shield_exposes_only_resolved_client_ip(monkeypatch):
+    monkeypatch.setenv("CLIENT_IP_HEADER", "x-forwarded-for")
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS_JSON", '["10.0.0.0/8"]')
+    monkeypatch.setenv("ALLOWED_HOSTS_JSON", '["testserver"]')
+    monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setenv("API_RATE_LIMIT", "120")
+    API_LIMITER.clear()
+
+    captured = {}
+    sent = []
+
+    async def app(scope, receive, send):
+        captured.update(scope["state"])
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "scheme": "https",
+        "path": "/estado",
+        "raw_path": b"/estado",
+        "query_string": b"",
+        "headers": [
+            (b"host", b"testserver"),
+            (b"x-forwarded-for", b"198.51.100.25"),
+        ],
+        "client": ("10.0.0.5", 12345),
+        "server": ("testserver", 443),
+    }
+
+    asyncio.run(ApiShieldMiddleware(app)(scope, receive, send))
+
+    assert captured["client_ip"] == "198.51.100.25"
+    assert captured["client_ip_source"] == "x-forwarded-for"
+    assert captured["trusted_proxy"] is True
+    assert sent[0]["status"] == 200
