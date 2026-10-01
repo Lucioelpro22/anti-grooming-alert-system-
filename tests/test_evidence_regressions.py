@@ -132,7 +132,7 @@ def test_pseudonymization_key_must_be_independent(storage, monkeypatch, duplicat
 )
 def test_invalid_pseudonymization_key_rejected(storage, monkeypatch, value):
     monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", value)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(rg.EvidenceSecurityError):
         validate_encryption_keys()
 
 
