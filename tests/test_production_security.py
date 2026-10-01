@@ -145,3 +145,32 @@ def test_invalid_app_environment_is_rejected(monkeypatch):
 
     with pytest.raises(ProductionSecurityError):
         app_environment()
+
+
+def test_production_accepts_explicit_trusted_proxy_policy(monkeypatch):
+    configure_valid_production(monkeypatch)
+    monkeypatch.setenv("CLIENT_IP_HEADER", "x-forwarded-for")
+    monkeypatch.setenv(
+        "TRUSTED_PROXY_CIDRS_JSON",
+        '["10.20.0.0/16","2001:db8:100::/48"]',
+    )
+
+    validate_production_security()
+
+
+def test_production_rejects_proxy_header_without_trusted_cidr(monkeypatch):
+    configure_valid_production(monkeypatch)
+    monkeypatch.setenv("CLIENT_IP_HEADER", "x-forwarded-for")
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS_JSON", "[]")
+
+    with pytest.raises(ProductionSecurityError, match="proxy"):
+        validate_production_security()
+
+
+def test_production_rejects_catch_all_trusted_proxy(monkeypatch):
+    configure_valid_production(monkeypatch)
+    monkeypatch.setenv("CLIENT_IP_HEADER", "forwarded")
+    monkeypatch.setenv("TRUSTED_PROXY_CIDRS_JSON", '["::/0"]')
+
+    with pytest.raises(ProductionSecurityError, match="proxy"):
+        validate_production_security()

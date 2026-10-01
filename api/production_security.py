@@ -9,6 +9,10 @@ import stat
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from api.client_ip import (
+    ClientIPConfigurationError,
+    validate_client_ip_configuration,
+)
 from api.redis_security import (
     RedisSecurityConfigurationError,
     validate_redis_url,
@@ -178,6 +182,13 @@ def validate_production_security() -> None:
     """Validate environment-wide invariants before accepting traffic."""
 
     environment = app_environment()
+    try:
+        validate_client_ip_configuration(production=environment == "production")
+    except ClientIPConfigurationError as exc:
+        raise ProductionSecurityError(
+            "Configuración de trusted proxy inválida"
+        ) from exc
+
     if environment != "production":
         return
 

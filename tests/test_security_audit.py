@@ -7,6 +7,7 @@ import pytest
 from fastapi import Request
 
 from api import security_audit
+from api.pseudonymization import pseudonymize
 
 
 @pytest.fixture()
@@ -148,3 +149,18 @@ def test_security_log_supports_audit_key_rotation(audit_env, monkeypatch):
     entries = security_audit.read_security_events()
     assert entries[0]["audit_key_id"] == "legacy"
     assert entries[1]["audit_key_id"] == "v2"
+
+
+def test_security_audit_prefers_resolved_client_ip_over_proxy_peer(audit_env):
+    request = _request()
+    request.scope["state"]["client_ip"] = "198.51.100.77"
+
+    security_audit.record_security_event(
+        "login_success",
+        request=request,
+        username="alice",
+    )
+
+    entry = security_audit.read_security_events()[-1]
+    assert entry["client_ip_ref"] == pseudonymize("security-ip:198.51.100.77")
+    assert entry["client_ip_ref"] != pseudonymize("security-ip:203.0.113.9")

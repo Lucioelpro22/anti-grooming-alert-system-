@@ -48,6 +48,62 @@ Terminate public TLS at a hardened reverse proxy/load balancer and forward only
 from explicitly trusted proxy addresses. Do not expose the Uvicorn worker
 directly to the public internet.
 
+## Trusted reverse proxies and client IP
+
+The API does not trust `Forwarded`, `X-Forwarded-For`, or
+`CF-Connecting-IP` just because the header exists. Forwarding data is consumed
+only when the immediate TCP peer belongs to an explicit CIDR in
+`TRUSTED_PROXY_CIDRS_JSON`.
+
+Select exactly one source with `CLIENT_IP_HEADER`:
+
+- `none`: ignore all forwarding headers and use the direct peer;
+- `x-forwarded-for`: for Nginx, ingress controllers, and load balancers that
+  maintain a sanitized XFF chain;
+- `forwarded`: for proxies using the standardized `Forwarded: for=` chain;
+- `cf-connecting-ip`: for a Cloudflare-only edge where the origin or trusted
+  internal proxy accepts traffic only from the expected Cloudflare path.
+
+Example for an internal reverse proxy:
+
+```text
+CLIENT_IP_HEADER=x-forwarded-for
+TRUSTED_PROXY_CIDRS_JSON=["10.20.0.0/16","2001:db8:100::/48"]
+MAX_FORWARDED_HOPS=10
+```
+
+The resolver walks XFF/Forwarded from the nearest hop toward the client and stops
+at the first untrusted address. This prevents an attacker-supplied leftmost XFF
+value from becoming the rate-limit identity merely because a trusted proxy
+appended its own hop.
+
+Never configure `0.0.0.0/0` or `::/0` as a trusted proxy. For a cloud/CDN
+provider, maintain only the provider's published proxy ranges and update them
+through a controlled deployment process.
+
+The reverse proxy must overwrite/sanitize the selected header and the application
+origin must not be directly reachable from arbitrary internet clients. Otherwise
+an attacker can bypass the proxy policy entirely.
+
+### Nginx pattern
+
+Configure Nginx to replace the client-IP header from its own trusted network
+context rather than forwarding an arbitrary inbound value unchanged. Point
+`TRUSTED_PROXY_CIDRS_JSON` at the Nginx/ingress subnet visible to Uvicorn and
+select the header Nginx writes.
+
+### Cloudflare pattern
+
+When using `CLIENT_IP_HEADER=cf-connecting-ip`, restrict origin ingress to the
+expected Cloudflare/proxy path and list only those immediate trusted proxy
+networks. The API rejects duplicate `CF-Connecting-IP` values from a trusted
+peer.
+
+Malformed forwarding data from a trusted proxy is rejected with HTTP 400.
+Invalid proxy configuration fails closed. The resolved address is used
+consistently by global rate limiting, login/password-spraying detection, and the
+pseudonymized authentication security audit.
+
 ## Authentication and MFA
 
 Production requires MFA policy coverage for `admin`, `supervisor`, and

@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import Request
 
 from api.audit_key_management import audit_key_for, current_audit_key
+from api.client_ip import request_client_ip
 from api.pseudonymization import pseudonymize
 
 LOG_FILENAME = "security-events.jsonl"
@@ -234,7 +235,7 @@ def _request_context(
     if request is None:
         return None, None, None
 
-    client_host = request.client.host if request.client else "unknown"
+    client_host = request_client_ip(request)
     user_agent = request.headers.get("user-agent", "")[:512]
     request_id = getattr(request.state, "request_id", None)
     return (
