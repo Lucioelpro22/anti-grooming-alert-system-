@@ -60,3 +60,40 @@ def test_docker_context_excludes_sensitive_material():
         "docs/",
     ):
         assert pattern in dockerignore
+
+
+def test_container_security_workflow_verifies_runtime_and_scans_image():
+    workflow = Path(".github/workflows/container-security.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Verify runtime hardening" in workflow
+    assert "org.opencontainers.image.revision" in workflow
+    assert "aquasecurity/trivy-action@" in workflow
+    assert "severity: CRITICAL,HIGH" in workflow
+    assert "Generate image SBOM" in workflow
+
+
+def test_container_release_is_scanned_main_only_and_tag_immutable():
+    workflow = Path(".github/workflows/container-release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Require main branch" in workflow
+    assert 'test "${GITHUB_REF}" = "refs/heads/main"' in workflow
+    assert "Build and scan before publish" in workflow
+    assert "Scan release candidate" in workflow
+    assert "Refuse mutable tag overwrite" in workflow
+    assert "Container tag already exists; releases are immutable." in workflow
+    assert "provenance: mode=max" in workflow
+    assert "sbom: true" in workflow
+    assert "Attest build provenance" in workflow
+    assert "org.opencontainers.image.revision" in workflow
+
+
+def test_dockerfile_avoids_mutable_package_manager_upgrade():
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+
+    assert "pip install --upgrade pip" not in dockerfile
+    assert "apt-get upgrade" not in dockerfile
+    assert "PIP_ONLY_BINARY=:all:" in dockerfile
