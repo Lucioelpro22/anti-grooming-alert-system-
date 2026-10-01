@@ -7,19 +7,23 @@ from api.runtime_secrets import RuntimeSecretError, load_runtime_secrets
 
 def test_runtime_secret_file_populates_target_environment(tmp_path, monkeypatch):
     secret = tmp_path / "jwt"
-    secret.write_text("runtime-secret-value\n", encoding="utf-8")
+    secret.write_text(
+        "runtime-secret-value\n", encoding="utf-8"
+    )  # pragma: allowlist secret
     monkeypatch.delenv("JWT_SECRET", raising=False)
     monkeypatch.setenv("JWT_SECRET_FILE", str(secret))
 
     load_runtime_secrets()
 
-    assert os.environ["JWT_SECRET"] == "runtime-secret-value"
+    assert os.environ["JWT_SECRET"] == "runtime-secret-value"  # pragma: allowlist secret
 
 
 def test_runtime_secret_rejects_direct_and_file_ambiguity(tmp_path, monkeypatch):
     secret = tmp_path / "jwt"
-    secret.write_text("file-secret", encoding="utf-8")
-    monkeypatch.setenv("JWT_SECRET", "direct-secret")
+    secret.write_text("file-secret", encoding="utf-8")  # pragma: allowlist secret
+    monkeypatch.setenv(
+        "JWT_SECRET", "direct-secret"  # pragma: allowlist secret
+    )
     monkeypatch.setenv("JWT_SECRET_FILE", str(secret))
 
     with pytest.raises(RuntimeSecretError):
