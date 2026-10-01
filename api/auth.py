@@ -163,10 +163,7 @@ def validate_configuration() -> None:
     if not users or not any(not user.disabled for user in users.values()):
         raise RuntimeError("Debe configurar al menos un usuario activo")
     validate_mfa_configuration(
-        {
-            username: (user.role.value, user.disabled)
-            for username, user in users.items()
-        }
+        {username: (user.role.value, user.disabled) for username, user in users.items()}
     )
     validate_encryption_keys()
 
