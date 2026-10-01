@@ -1,0 +1,6 @@
+# Security-sensitive ownership rules
+* @Lucioelpro22
+
+/.github/ @Lucioelpro22
+/api/ @Lucioelpro22
+/SECURITY.md @Lucioelpro22
