@@ -270,7 +270,7 @@ def test_jwt_rotation_keeps_legacy_token_valid_until_key_is_retired(
 
 
 def test_unknown_jwt_kid_is_rejected(client):
-    secret = "test-secret-that-is-longer-than-32-bytes"
+    secret = "test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
     now = datetime.now(timezone.utc)
     forged_header_token = jwt.encode(
         {
