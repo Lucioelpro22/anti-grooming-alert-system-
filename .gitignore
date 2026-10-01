@@ -9,3 +9,4 @@ informes_generados/
 .env
 .env.*
 !.env.example
+secrets/
