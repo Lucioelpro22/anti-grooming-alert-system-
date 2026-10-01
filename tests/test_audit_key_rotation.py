@@ -106,3 +106,14 @@ def test_audit_key_for_rejects_unknown_historical_id(monkeypatch):
 
     with pytest.raises(rg.EvidenceSecurityError, match="histórica"):
         audit_key_for("legacy")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["{}", "[]", "not-json", '{"v2":"not-base64"}'],
+)
+def test_invalid_audit_keyring_is_rejected(monkeypatch, raw):
+    monkeypatch.setenv("AUDIT_HMAC_KEYS_JSON", raw)
+
+    with pytest.raises(rg.EvidenceSecurityError):
+        load_audit_keyring()
