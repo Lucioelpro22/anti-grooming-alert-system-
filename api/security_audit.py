@@ -76,7 +76,9 @@ def _transaction() -> Iterator[sqlite3.Connection]:
             yield connection
             connection.commit()
         except (OSError, sqlite3.Error) as exc:
-            raise SecurityAuditError("Estado de auditoría de seguridad no disponible") from exc
+            raise SecurityAuditError(
+                "Estado de auditoría de seguridad no disponible"
+            ) from exc
         finally:
             _LOCAL.connection = None
             if connection is not None:
@@ -102,7 +104,9 @@ def _atomic_write(path: Path, data: bytes) -> None:
         os.replace(temporary, path)
         temporary = None
     except OSError as exc:
-        raise SecurityAuditError("No se pudo escribir la auditoría de seguridad") from exc
+        raise SecurityAuditError(
+            "No se pudo escribir la auditoría de seguridad"
+        ) from exc
     finally:
         if temporary is not None:
             Path(temporary).unlink(missing_ok=True)
@@ -176,7 +180,9 @@ def _read_verified(
         try:
             key = audit_key_for(key_id)
         except RuntimeError as exc:
-            raise SecurityAuditError("Clave histórica de seguridad no disponible") from exc
+            raise SecurityAuditError(
+                "Clave histórica de seguridad no disponible"
+            ) from exc
         expected = hmac.new(key, _canonical(entry), hashlib.sha256).hexdigest()
         if not isinstance(entry_hash, str) or not hmac.compare_digest(
             entry_hash, expected
@@ -222,7 +228,9 @@ def read_security_events() -> list[dict[str, Any]]:
         return _read_verified(connection)
 
 
-def _request_context(request: Request | None) -> tuple[str | None, str | None, str | None]:
+def _request_context(
+    request: Request | None,
+) -> tuple[str | None, str | None, str | None]:
     if request is None:
         return None, None, None
 
