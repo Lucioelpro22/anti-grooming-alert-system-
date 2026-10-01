@@ -16,7 +16,9 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
+from api.audit_state import EvidenceSecurityError
 from api.key_management import current_key
+from api.pseudonymization import pseudonymization_key
 from api.report_generator import _decode_key
 from api.token_revocation import (
     RevocationBackendUnavailable,
@@ -130,8 +132,14 @@ def load_users() -> dict[str, StoredUser]:
 def validate_encryption_keys() -> None:
     _, evidence_key = current_key()
     audit_key = _decode_key("AUDIT_HMAC_KEY")
-    if evidence_key == audit_key:
-        raise RuntimeError("Las claves de cifrado y auditoría deben ser distintas")
+    try:
+        pseudonym_key = pseudonymization_key()
+    except RuntimeError as exc:
+        raise EvidenceSecurityError("Clave de seudonimización inválida") from exc
+    if len({evidence_key, audit_key, pseudonym_key}) != 3:
+        raise RuntimeError(
+            "Las claves de cifrado, auditoría y seudonimización deben ser distintas"
+        )
 
 
 def validate_configuration() -> None:
