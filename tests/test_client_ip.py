@@ -145,11 +145,7 @@ def test_forwarded_chain_has_a_hard_hop_limit(monkeypatch):
     with pytest.raises(ClientIPResolutionError):
         resolve_client_ip(
             "10.0.0.5",
-            _headers(
-                x_forwarded_for=(
-                    "198.51.100.1, 198.51.100.2, 198.51.100.3"
-                )
-            ),
+            _headers(x_forwarded_for=("198.51.100.1, 198.51.100.2, 198.51.100.3")),
         )
 
 
