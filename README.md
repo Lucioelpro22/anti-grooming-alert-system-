@@ -89,8 +89,10 @@ Antes de iniciar la API:
 2. Generá `JWT_SECRET` con `openssl rand -hex 32`.
 3. Generá hashes con `python scripts/hash_password.py`.
 4. Definí los usuarios en `AUTH_USERS_JSON` usando únicamente hashes Argon2.
-5. Ejecutá `python scripts/generate_security_keys.py` y guardá las dos claves
-   generadas en `EVIDENCE_ENCRYPTION_KEY` y `AUDIT_HMAC_KEY`. Deben ser distintas.
+5. Ejecutá `python scripts/generate_security_keys.py` y guardá las tres claves
+   generadas en `EVIDENCE_ENCRYPTION_KEY`, `AUDIT_HMAC_KEY` y
+   `PSEUDONYMIZATION_HMAC_KEY`. Las tres deben ser distintas. Conservá la clave
+   de seudonimización para mantener identificadores estables entre informes.
 6. Configurá `ALLOWED_HOSTS_JSON` con los dominios reales del servicio. Solo si
    existe un frontend web, agregá sus orígenes exactos a `ALLOWED_ORIGINS_JSON`.
 
