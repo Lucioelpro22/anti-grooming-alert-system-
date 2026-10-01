@@ -62,6 +62,27 @@ Estas aplicaciones **no reemplazan** a los Proyectos 2, 3 y 4 originales; quedan
 El sistema no identifica agresores ni determina culpabilidad. Sus resultados son
 indicadores automatizados de apoyo y siempre requieren revisión humana.
 
+## Perfil de seguridad de producción
+
+Con `APP_ENV=production`, la API aplica un perfil fail-closed: los backends
+críticos deben usar Redis compartido, `REDIS_URL` debe usar TLS autenticado
+(`rediss://`) con verificación de certificado/hostname, los hosts deben ser
+exactos, los orígenes web deben usar HTTPS y MFA no puede deshabilitarse para
+`admin`, `supervisor` ni `auditor`.
+
+Si PostgreSQL está habilitado, producción exige `sslmode=verify-full`. Los
+checkpoints de auditoría deben usar rutas absolutas separadas y no depender de
+directorios world-writable existentes.
+
+Antes de exponer tráfico ejecutá:
+
+`python -m scripts.check_production_config`
+
+El preflight valida la configuración real del contenedor/VM y verifica ambos
+checkpoints de auditoría sin imprimir secretos.
+
+➡️ [Guía completa de hardening de producción](docs/PRODUCTION_SECURITY.md)
+
 ## Seguridad V3.2
 
 La API usa OAuth2 con tokens JWT de corta duración, contraseñas Argon2 y roles
@@ -233,19 +254,22 @@ cabeceras defensivas, y mantiene CORS cerrado salvo los orígenes declarados.
 
 Antes de iniciar la API:
 
-1. Copiá `.env.example` a un archivo local `.env` que nunca debe subirse.
-2. Generá `JWT_SECRET` con `openssl rand -hex 32` o
+1. Usá `APP_ENV=development` para trabajo local. En producción definí
+   `APP_ENV=production` y seguí `docs/PRODUCTION_SECURITY.md`.
+2. Copiá `.env.example` solo como referencia local; en producción inyectá
+   secretos mediante el secret manager del entorno y no desde archivos versionados.
+3. Generá `JWT_SECRET` con `openssl rand -hex 32` o
    `python scripts/generate_jwt_secret.py`. Para rotación sin corte de sesiones,
    usá `JWT_SECRETS_JSON` y `JWT_CURRENT_KEY_ID`.
-3. Generá hashes con `python scripts/hash_password.py`.
-4. Definí los usuarios en `AUTH_USERS_JSON` usando únicamente hashes Argon2.
-5. Ejecutá `python scripts/generate_security_keys.py` y guardá las tres claves
+4. Generá hashes con `python scripts/hash_password.py`.
+5. Definí los usuarios en `AUTH_USERS_JSON` usando únicamente hashes Argon2.
+6. Ejecutá `python scripts/generate_security_keys.py` y guardá las tres claves
    generadas en `EVIDENCE_ENCRYPTION_KEY`, `AUDIT_HMAC_KEY` y
    `PSEUDONYMIZATION_HMAC_KEY`. Las tres deben ser distintas. Conservá la clave
    de seudonimización para mantener identificadores estables entre informes.
-6. Configurá `SECURITY_AUDIT_DIR` y `SECURITY_AUDIT_STATE_DB` en
+7. Configurá `SECURITY_AUDIT_DIR` y `SECURITY_AUDIT_STATE_DB` en
    ubicaciones separadas con permisos y respaldos independientes.
-7. Configurá `ALLOWED_HOSTS_JSON` con los dominios reales del servicio. Solo si
+8. Configurá `ALLOWED_HOSTS_JSON` con los dominios reales del servicio. Solo si
    existe un frontend web, agregá sus orígenes exactos a `ALLOWED_ORIGINS_JSON`.
 
 Cada push a `main` o a una rama de seguridad, y cada Pull Request hacia `main`,
