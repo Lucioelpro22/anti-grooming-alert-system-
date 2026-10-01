@@ -15,9 +15,8 @@ def test_runtime_secret_file_populates_target_environment(tmp_path, monkeypatch)
 
     load_runtime_secrets()
 
-    assert (
-        os.environ["JWT_SECRET"] == "runtime-secret-value"
-    )  # pragma: allowlist secret
+    expected_value = "runtime-secret-value"
+    assert os.environ["JWT_SECRET"] == expected_value
 
 
 def test_runtime_secret_rejects_direct_and_file_ambiguity(tmp_path, monkeypatch):
