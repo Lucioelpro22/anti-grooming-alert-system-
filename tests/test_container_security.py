@@ -13,6 +13,8 @@ def test_dockerfile_runs_as_non_root_and_disables_uvicorn_proxy_headers():
     assert all(character in "0123456789abcdef" for character in digest)
     assert "USER 10001:10001" in dockerfile
     assert "apt-get upgrade" not in dockerfile
+    assert "PCRE2_SECURITY_VERSION=10.46-1~deb13u3" in dockerfile
+    assert "OPENSSL_SECURITY_VERSION=3.5.7-1~deb13u3" in dockerfile
     assert "COPY --chown=0:0 api /app/api" in dockerfile
     assert "COPY --chown=0:0 scripts /app/scripts" in dockerfile
     assert "chmod -R a-w /app/api /app/scripts /opt/venv" in dockerfile
