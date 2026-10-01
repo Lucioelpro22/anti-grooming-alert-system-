@@ -16,10 +16,10 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
+from api.audit_key_management import current_audit_key, load_audit_keyring
 from api.audit_state import EvidenceSecurityError
-from api.key_management import current_key
+from api.key_management import current_key, load_keyring
 from api.pseudonymization import pseudonymization_key
-from api.report_generator import _decode_key
 from api.token_revocation import (
     RevocationBackendUnavailable,
     RevocationCapacityExceeded,
