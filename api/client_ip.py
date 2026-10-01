@@ -115,6 +115,13 @@ def validate_client_ip_configuration(*, production: bool = False) -> None:
                 )
 
 
+def _canonical_address(value: str) -> str:
+    parsed = ipaddress.ip_address(value)
+    if isinstance(parsed, ipaddress.IPv6Address) and parsed.ipv4_mapped:
+        return str(parsed.ipv4_mapped)
+    return str(parsed)
+
+
 def _parse_ip(value: str) -> str:
     raw = value.strip()
     if not raw:
@@ -136,7 +143,7 @@ def _parse_ip(value: str) -> str:
             raise ClientIPResolutionError("Puerto de proxy inválido")
     else:
         try:
-            return str(ipaddress.ip_address(raw))
+            return _canonical_address(raw)
         except ValueError:
             if raw.count(":") == 1:
                 candidate, port = raw.rsplit(":", 1)
@@ -148,7 +155,7 @@ def _parse_ip(value: str) -> str:
                     ) from None
 
     try:
-        return str(ipaddress.ip_address(host))
+        return _canonical_address(host)
     except ValueError as exc:
         raise ClientIPResolutionError("Dirección de proxy inválida") from exc
 
@@ -205,7 +212,7 @@ def _is_trusted(
     networks: Iterable[ipaddress.IPv4Network | ipaddress.IPv6Network],
 ) -> bool:
     try:
-        parsed = ipaddress.ip_address(address)
+        parsed = ipaddress.ip_address(_canonical_address(address))
     except ValueError:
         return False
     return any(parsed.version == network.version and parsed in network for network in networks)
@@ -239,7 +246,7 @@ def resolve_client_ip(
         return ClientIPResult("unknown", "peer", False)
 
     try:
-        peer_ip = str(ipaddress.ip_address(peer_host))
+        peer_ip = _canonical_address(peer_host)
     except ValueError:
         if mode == "none":
             return ClientIPResult(peer_host, "peer", False)
