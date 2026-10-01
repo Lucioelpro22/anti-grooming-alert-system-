@@ -9,7 +9,13 @@ from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
 from api import report_generator
-from api.auth import JWT_AUDIENCE, JWT_ISSUER, LOGIN_LIMITER, TOKEN_REVOCATIONS
+from api.auth import (
+    JWT_AUDIENCE,
+    JWT_ISSUER,
+    LOGIN_LIMITER,
+    SESSIONS,
+    TOKEN_REVOCATIONS,
+)
 from api.security import API_LIMITER, REPORT_LIMITER
 
 PASSWORD = "correct-horse-battery-staple"  # pragma: allowlist secret
@@ -58,6 +64,8 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("API_RATE_LIMIT", "1000")
     monkeypatch.setenv("API_RATE_WINDOW_SECONDS", "60")
     monkeypatch.setenv("TOKEN_REVOCATION_BACKEND", "memory")
+    monkeypatch.setenv("SESSION_BACKEND", "memory")
+    monkeypatch.setenv("REFRESH_TOKEN_DAYS", "7")
     monkeypatch.delenv("REDIS_URL", raising=False)
     monkeypatch.setattr(report_generator, "CARPETA_INFORMES", tmp_path)
     monkeypatch.setenv(
@@ -68,18 +76,24 @@ def client(monkeypatch, tmp_path):
     LOGIN_LIMITER._failures.clear()
     API_LIMITER.clear()
     TOKEN_REVOCATIONS.clear()
+    SESSIONS.clear()
     from api.main import app
 
     with TestClient(app) as test_client:
         yield test_client
     API_LIMITER.clear()
     TOKEN_REVOCATIONS.clear()
+    SESSIONS.clear()
+
+
+def token_pair(client, username, password=PASSWORD):
+    response = client.post("/token", data={"username": username, "password": password})
+    assert response.status_code == 200
+    return response.json()
 
 
 def token(client, username, password=PASSWORD):
-    response = client.post("/token", data={"username": username, "password": password})
-    assert response.status_code == 200
-    return response.json()["access_token"]
+    return token_pair(client, username, password)["access_token"]
 
 
 def headers(client, username):
@@ -113,6 +127,95 @@ def test_logout_revokes_token_and_prevents_replay(client):
 
 def test_logout_requires_authentication(client):
     assert client.post("/logout").status_code == 401
+
+
+def test_login_returns_refresh_token(client):
+    pair = token_pair(client, "analyst-a")
+    assert pair["access_token"]
+    assert pair["refresh_token"]
+    assert pair["refresh_token"] != pair["access_token"]
+    assert pair["refresh_expires_in"] == 7 * 24 * 60 * 60
+
+
+def test_refresh_token_rotates_once_and_new_pair_works(client):
+    first = token_pair(client, "analyst-a")
+    refreshed = client.post(
+        "/token/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+    assert refreshed.status_code == 200
+    second = refreshed.json()
+    assert second["refresh_token"] != first["refresh_token"]
+    assert second["access_token"] != first["access_token"]
+    auth = {"Authorization": f"Bearer {second['access_token']}"}
+    assert client.get("/informe/deadbeef", headers=auth).status_code == 404
+
+
+def test_refresh_reuse_revokes_entire_user_session(client):
+    first = token_pair(client, "analyst-a")
+    rotated = client.post(
+        "/token/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+    assert rotated.status_code == 200
+    second = rotated.json()
+
+    replay = client.post(
+        "/token/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+    assert replay.status_code == 401
+    assert "reutilizado" in replay.json()["detail"]
+
+    second_auth = {"Authorization": f"Bearer {second['access_token']}"}
+    assert client.get("/informe/deadbeef", headers=second_auth).status_code == 401
+    assert (
+        client.post(
+            "/token/refresh", json={"refresh_token": second["refresh_token"]}
+        ).status_code
+        == 401
+    )
+
+
+def test_logout_all_invalidates_all_user_access_and_refresh_tokens(client):
+    first = token_pair(client, "analyst-a")
+    second = token_pair(client, "analyst-a")
+    auth = {"Authorization": f"Bearer {first['access_token']}"}
+
+    response = client.post("/logout-all", headers=auth)
+    assert response.status_code == 200
+
+    for pair in (first, second):
+        old_auth = {"Authorization": f"Bearer {pair['access_token']}"}
+        assert client.get("/informe/deadbeef", headers=old_auth).status_code == 401
+        assert (
+            client.post(
+                "/token/refresh", json={"refresh_token": pair["refresh_token"]}
+            ).status_code
+            == 401
+        )
+
+    replacement = token_pair(client, "analyst-a")
+    replacement_auth = {"Authorization": f"Bearer {replacement['access_token']}"}
+    assert client.get("/informe/deadbeef", headers=replacement_auth).status_code == 404
+
+
+def test_invalid_refresh_token_is_rejected(client):
+    response = client.post(
+        "/token/refresh", json={"refresh_token": "x" * 43}
+    )
+    assert response.status_code == 401
+
+
+def test_session_backend_outage_fails_closed(client, monkeypatch):
+    access_token = token(client, "analyst-a")
+    monkeypatch.setenv("SESSION_BACKEND", "redis")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    SESSIONS.clear()
+
+    response = client.get(
+        "/informe/deadbeef",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Servicio de sesiones no disponible"
 
 
 def test_revocation_backend_outage_fails_closed(client, monkeypatch):
