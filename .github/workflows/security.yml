@@ -71,6 +71,11 @@ jobs:
           results = json.loads(Path("/tmp/secrets.json").read_text())["results"]
           findings = sum(len(matches) for matches in results.values())
           if findings:
+              for path, matches in sorted(results.items()):
+                  for match in matches:
+                      line = match.get("line_number", "?")
+                      detector = match.get("type", "unknown")
+                      print(f"{path}:{line}: {detector}")
               raise SystemExit(f"detect-secrets found {findings} potential secret(s)")
           print("detect-secrets: 0 potential secrets")
           PY
