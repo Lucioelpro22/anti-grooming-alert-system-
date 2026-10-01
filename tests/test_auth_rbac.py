@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -8,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
-from api import report_generator
+from api import report_generator, security_audit
 from api.auth import (
     JWT_AUDIENCE,
     JWT_ISSUER,
@@ -75,6 +76,16 @@ def client(monkeypatch, tmp_path):
         "AUDIT_STATE_DB",
         str(tmp_path.parent / (tmp_path.name + "-state") / "audit.sqlite"),
     )
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_DIR",
+        str(tmp_path.parent / (tmp_path.name + "-security-audit")),
+    )
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_STATE_DB",
+        str(
+            tmp_path.parent / (tmp_path.name + "-security-state") / "checkpoint.sqlite"
+        ),
+    )
     REPORT_LIMITER.clear()
     LOGIN_LIMITER._failures.clear()
     API_LIMITER.clear()
@@ -138,6 +149,77 @@ def test_login_returns_refresh_token(client):
     assert pair["refresh_token"]
     assert pair["refresh_token"] != pair["access_token"]
     assert pair["refresh_expires_in"] == 7 * 24 * 60 * 60
+
+
+def test_auth_security_log_never_contains_login_secrets(client):
+    pair = token_pair(client, "analyst-a")
+    path = Path(os.environ["SECURITY_AUDIT_DIR"]) / security_audit.LOG_FILENAME
+    raw = path.read_text(encoding="utf-8")
+
+    assert PASSWORD not in raw
+    assert pair["access_token"] not in raw
+    assert pair["refresh_token"] not in raw
+    assert "analyst-a" not in raw
+
+    events = security_audit.read_security_events()
+    assert events[-1]["event"] == "login_success"
+    assert events[-1]["subject_ref"]
+    assert events[-1]["request_id"]
+
+
+def test_login_fails_closed_when_security_audit_is_unavailable(client, monkeypatch):
+    log_dir = Path(os.environ["SECURITY_AUDIT_DIR"])
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_STATE_DB",
+        str(log_dir / "checkpoint.sqlite"),
+    )
+
+    response = client.post(
+        "/token",
+        data={"username": "analyst-a", "password": PASSWORD},
+    )
+    assert response.status_code == 503
+    assert "access_token" not in response.text
+    assert "refresh_token" not in response.text
+
+
+def test_refresh_reuse_creates_critical_security_alert(client):
+    first = token_pair(client, "analyst-a")
+    rotated = client.post(
+        "/token/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+    assert rotated.status_code == 200
+
+    replay = client.post(
+        "/token/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+    assert replay.status_code == 401
+
+    events = security_audit.read_security_events()
+    alert = next(
+        event
+        for event in reversed(events)
+        if event["event"] == "refresh_reuse_detected"
+    )
+    assert alert["severity"] == "critical"
+    assert alert["alert"] is True
+    assert alert["reason"] == "replay"
+
+
+def test_logout_all_is_recorded_as_security_alert(client):
+    pair = token_pair(client, "analyst-a")
+    response = client.post(
+        "/logout-all",
+        headers={"Authorization": f"Bearer {pair['access_token']}"},
+    )
+    assert response.status_code == 200
+
+    events = security_audit.read_security_events()
+    alert = events[-1]
+    assert alert["event"] == "logout_all"
+    assert alert["severity"] == "warning"
+    assert alert["alert"] is True
+    assert alert["subject_ref"]
 
 
 def test_refresh_token_rotates_once_and_new_pair_works(client):

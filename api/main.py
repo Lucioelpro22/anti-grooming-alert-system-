@@ -10,7 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.middleware.cors import CORSMiddleware
 
-from api import detect_patterns, ip_analysis, report_generator
+from api import detect_patterns, ip_analysis, report_generator, security_audit
 from api.auth import (
     LOGIN_LIMITER,
     Role,
@@ -35,6 +35,7 @@ from api.security import REPORT_LIMITER, ApiShieldMiddleware, env_list
 async def lifespan(app: FastAPI):
     validate_configuration()
     report_generator.verificar_auditoria()
+    security_audit.verify_security_audit()
     yield
 
 
@@ -117,24 +118,125 @@ class EstadoInforme(BaseModel):
     estado: EvidenceStatus
 
 
+def _record_security_event_or_503(
+    event: str,
+    *,
+    request: Request,
+    username: str | None = None,
+    role: str | None = None,
+    severity: str = "info",
+    reason: str | None = None,
+) -> None:
+    try:
+        security_audit.record_security_event(
+            event,
+            request=request,
+            username=username,
+            role=role,
+            severity=severity,
+            reason=reason,
+        )
+    except security_audit.SecurityAuditError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auditoría de seguridad no disponible",
+        ) from exc
+
+
 @app.post("/token", response_model=TokenResponse)
 def login(
     request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     mfa_code: Annotated[str | None, Form()] = None,
 ):
-    LOGIN_LIMITER.check(request, form.username)
+    try:
+        LOGIN_LIMITER.check(request, form.username)
+    except HTTPException:
+        _record_security_event_or_503(
+            "login_rate_limited",
+            request=request,
+            username=form.username,
+            severity="warning",
+            reason="rate_limit",
+        )
+        raise
+
     user = authenticate_user(form.username, form.password)
-    if user is None or not authenticate_mfa(user, mfa_code):
+    if user is None:
         LOGIN_LIMITER.failure(request, form.username)
+        _record_security_event_or_503(
+            "login_failed",
+            request=request,
+            username=form.username,
+            severity="warning",
+            reason="credentials",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario, contraseña o MFA inválidos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    try:
+        mfa_valid = authenticate_mfa(user, mfa_code)
+    except HTTPException:
+        _record_security_event_or_503(
+            "auth_backend_error",
+            request=request,
+            username=user.username,
+            role=user.role.value,
+            severity="critical",
+            reason="mfa_backend",
+        )
+        raise
+
+    if not mfa_valid:
+        LOGIN_LIMITER.failure(request, form.username)
+        _record_security_event_or_503(
+            "login_failed",
+            request=request,
+            username=user.username,
+            role=user.role.value,
+            severity="warning",
+            reason="mfa",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario, contraseña o MFA inválidos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     LOGIN_LIMITER.success(request, form.username)
-    refresh_token, refresh_expires_in, session_version = create_refresh_session(user)
-    access_token, expires_in = create_access_token(user, session_version)
+    try:
+        refresh_token, refresh_expires_in, session_version = create_refresh_session(
+            user
+        )
+        access_token, expires_in = create_access_token(user, session_version)
+    except HTTPException:
+        _record_security_event_or_503(
+            "auth_backend_error",
+            request=request,
+            username=user.username,
+            role=user.role.value,
+            severity="critical",
+            reason="session_issue",
+        )
+        raise
+
+    try:
+        _record_security_event_or_503(
+            "login_success",
+            request=request,
+            username=user.username,
+            role=user.role.value,
+        )
+    except HTTPException:
+        try:
+            revoke_all_user_sessions(user)
+        except HTTPException:
+            pass
+        raise
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -144,11 +246,48 @@ def login(
 
 
 @app.post("/token/refresh", response_model=TokenResponse)
-def refresh_token(payload: RefreshTokenRequest):
-    user, next_refresh, refresh_expires_in, session_version = rotate_refresh_session(
-        payload.refresh_token
-    )
-    access_token, expires_in = create_access_token(user, session_version)
+def refresh_token(request: Request, payload: RefreshTokenRequest):
+    try:
+        user, next_refresh, refresh_expires_in, session_version = (
+            rotate_refresh_session(payload.refresh_token)
+        )
+        access_token, expires_in = create_access_token(user, session_version)
+    except HTTPException as exc:
+        detail = str(exc.detail)
+        if "reutilizado" in detail:
+            event = "refresh_reuse_detected"
+            severity = "critical"
+            reason = "replay"
+        elif exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            event = "auth_backend_error"
+            severity = "critical"
+            reason = "refresh_backend"
+        else:
+            event = "refresh_failed"
+            severity = "warning"
+            reason = "invalid_refresh"
+        _record_security_event_or_503(
+            event,
+            request=request,
+            severity=severity,
+            reason=reason,
+        )
+        raise
+
+    try:
+        _record_security_event_or_503(
+            "refresh_success",
+            request=request,
+            username=user.username,
+            role=user.role.value,
+        )
+    except HTTPException:
+        try:
+            revoke_all_user_sessions(user)
+        except HTTPException:
+            pass
+        raise
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=next_refresh,
@@ -158,14 +297,34 @@ def refresh_token(payload: RefreshTokenRequest):
 
 
 @app.post("/logout")
-def logout(user: Annotated[User, Depends(get_current_user)]):
+def logout(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+):
     revoke_access_token(user)
+    _record_security_event_or_503(
+        "logout",
+        request=request,
+        username=user.username,
+        role=user.role.value,
+    )
     return {"estado": "sesión revocada"}
 
 
 @app.post("/logout-all")
-def logout_all(user: Annotated[User, Depends(get_current_user)]):
+def logout_all(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+):
     revoke_all_user_sessions(user)
+    _record_security_event_or_503(
+        "logout_all",
+        request=request,
+        username=user.username,
+        role=user.role.value,
+        severity="warning",
+        reason="user_requested",
+    )
     return {"estado": "todas las sesiones revocadas"}
 
 

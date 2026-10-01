@@ -1,11 +1,13 @@
 import base64
 import json
+import os
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
-from api import report_generator
+from api import report_generator, security_audit
 from api.auth import LOGIN_LIMITER, SESSIONS, TOKEN_REVOCATIONS
 from api.mfa import (
     MFA_STATE,
@@ -77,6 +79,16 @@ def mfa_client(monkeypatch, tmp_path):
         "AUDIT_STATE_DB",
         str(tmp_path.parent / (tmp_path.name + "-state") / "audit.sqlite"),
     )
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_DIR",
+        str(tmp_path.parent / (tmp_path.name + "-security-audit")),
+    )
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_STATE_DB",
+        str(
+            tmp_path.parent / (tmp_path.name + "-security-state") / "checkpoint.sqlite"
+        ),
+    )
 
     REPORT_LIMITER.clear()
     LOGIN_LIMITER._failures.clear()
@@ -117,6 +129,21 @@ def test_valid_totp_allows_login_and_same_code_cannot_be_replayed(mfa_client):
 
     replay = login(mfa_client, "admin", mfa_code=code)
     assert replay.status_code == 401
+
+
+def test_mfa_code_and_username_never_appear_in_security_log(mfa_client):
+    code = totp_code(TOTP_SECRET_BYTES)
+    response = login(mfa_client, "admin", mfa_code=code)
+    assert response.status_code == 200
+
+    path = Path(os.environ["SECURITY_AUDIT_DIR"]) / security_audit.LOG_FILENAME
+    raw = path.read_text(encoding="utf-8")
+    assert code not in raw
+    assert PASSWORD not in raw
+
+    events = security_audit.read_security_events()
+    assert events[-1]["event"] == "login_success"
+    assert events[-1]["subject_ref"]
 
 
 def test_recovery_code_is_one_time(mfa_client):

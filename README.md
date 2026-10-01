@@ -156,6 +156,33 @@ protección contra replay y el consumo de recovery codes sean compartidos. Si es
 estado no puede consultarse, la autenticación falla cerrada.
 
 
+### Bitácora de seguridad de autenticación
+
+Los eventos de autenticación se registran en una bitácora separada de la cadena
+de evidencias. Incluye login exitoso/fallido, fallos MFA, rate limiting, refresh
+exitoso o inválido, detección de reutilización de refresh tokens, `logout`,
+`logout-all` y errores de backends de autenticación.
+
+Cada evento queda enlazado mediante `previous_hash` y firmado con el key-ring
+HMAC de auditoría. La bitácora tiene además un checkpoint SQLite independiente:
+si se modifica, trunca, borra o retrocede el historial sin actualizar ese
+checkpoint confiable, el servicio detecta la inconsistencia y falla cerrado.
+
+La bitácora no recibe contraseñas, JWT, refresh tokens, secretos o códigos MFA ni
+recovery codes. Usuario, IP y User-Agent se convierten en referencias HMAC
+estables antes de escribirse. Se conservan el rol, tipo de evento, motivo,
+severidad y `request_id` para correlación operativa.
+
+Los eventos `warning` y `critical` llevan `alert=true`. La reutilización de
+refresh tokens y los fallos de backends de autenticación se marcan como
+`critical`, dejando el formato listo para integrarlo luego con un SIEM o un
+pipeline de notificaciones sin exponer credenciales.
+
+Configurá `SECURITY_AUDIT_DIR` y `SECURITY_AUDIT_STATE_DB` en ubicaciones
+separadas y protegidas; el checkpoint no puede estar dentro del directorio del
+log. Ambos deben respaldarse de forma independiente.
+
+
 Los informes se almacenan cifrados con AES-256-GCM. Sus metadatos están
 autenticados y cada creación, lectura o acceso denegado se registra en una
 cadena de auditoría firmada con HMAC-SHA256. Las escrituras son atómicas y el
@@ -177,7 +204,9 @@ Antes de iniciar la API:
    generadas en `EVIDENCE_ENCRYPTION_KEY`, `AUDIT_HMAC_KEY` y
    `PSEUDONYMIZATION_HMAC_KEY`. Las tres deben ser distintas. Conservá la clave
    de seudonimización para mantener identificadores estables entre informes.
-6. Configurá `ALLOWED_HOSTS_JSON` con los dominios reales del servicio. Solo si
+6. Configurá `SECURITY_AUDIT_DIR` y `SECURITY_AUDIT_STATE_DB` en
+   ubicaciones separadas con permisos y respaldos independientes.
+7. Configurá `ALLOWED_HOSTS_JSON` con los dominios reales del servicio. Solo si
    existe un frontend web, agregá sus orígenes exactos a `ALLOWED_ORIGINS_JSON`.
 
 Cada push a `main` o a una rama de seguridad, y cada Pull Request hacia `main`,

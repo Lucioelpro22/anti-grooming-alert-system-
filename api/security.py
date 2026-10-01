@@ -131,6 +131,7 @@ class ApiShieldMiddleware:
             if REQUEST_ID_PATTERN.fullmatch(request_id_value)
             else secrets.token_hex(16)
         )
+        scope.setdefault("state", {})["request_id"] = request_id
 
         async def secure_send(message: Message) -> None:
             if message["type"] == "http.response.start":
