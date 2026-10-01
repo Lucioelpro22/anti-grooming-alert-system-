@@ -208,7 +208,9 @@ def login(
 
     LOGIN_LIMITER.success(request, form.username)
     try:
-        refresh_token, refresh_expires_in, session_version = create_refresh_session(user)
+        refresh_token, refresh_expires_in, session_version = create_refresh_session(
+            user
+        )
         access_token, expires_in = create_access_token(user, session_version)
     except HTTPException:
         _record_security_event_or_503(
@@ -246,8 +248,8 @@ def login(
 @app.post("/token/refresh", response_model=TokenResponse)
 def refresh_token(request: Request, payload: RefreshTokenRequest):
     try:
-        user, next_refresh, refresh_expires_in, session_version = rotate_refresh_session(
-            payload.refresh_token
+        user, next_refresh, refresh_expires_in, session_version = (
+            rotate_refresh_session(payload.refresh_token)
         )
         access_token, expires_in = create_access_token(user, session_version)
     except HTTPException as exc:
