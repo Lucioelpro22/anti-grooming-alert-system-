@@ -169,6 +169,24 @@ def test_auth_security_log_never_contains_login_secrets(client):
     assert events[-1]["request_id"]
 
 
+def test_login_fails_closed_when_security_audit_is_unavailable(
+    client, monkeypatch
+):
+    log_dir = Path(os.environ["SECURITY_AUDIT_DIR"])
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_STATE_DB",
+        str(log_dir / "checkpoint.sqlite"),
+    )
+
+    response = client.post(
+        "/token",
+        data={"username": "analyst-a", "password": PASSWORD},
+    )
+    assert response.status_code == 503
+    assert "access_token" not in response.text
+    assert "refresh_token" not in response.text
+
+
 def test_refresh_reuse_creates_critical_security_alert(client):
     first = token_pair(client, "analyst-a")
     rotated = client.post(
