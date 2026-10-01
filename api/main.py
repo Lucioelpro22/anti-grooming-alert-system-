@@ -35,6 +35,7 @@ from api.security import REPORT_LIMITER, ApiShieldMiddleware, env_list
 async def lifespan(app: FastAPI):
     validate_configuration()
     report_generator.verificar_auditoria()
+    security_audit.verify_security_audit()
     yield
 
 
@@ -243,11 +244,48 @@ def login(
 
 
 @app.post("/token/refresh", response_model=TokenResponse)
-def refresh_token(payload: RefreshTokenRequest):
-    user, next_refresh, refresh_expires_in, session_version = rotate_refresh_session(
-        payload.refresh_token
-    )
-    access_token, expires_in = create_access_token(user, session_version)
+def refresh_token(request: Request, payload: RefreshTokenRequest):
+    try:
+        user, next_refresh, refresh_expires_in, session_version = rotate_refresh_session(
+            payload.refresh_token
+        )
+        access_token, expires_in = create_access_token(user, session_version)
+    except HTTPException as exc:
+        detail = str(exc.detail)
+        if "reutilizado" in detail:
+            event = "refresh_reuse_detected"
+            severity = "critical"
+            reason = "replay"
+        elif exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+            event = "auth_backend_error"
+            severity = "critical"
+            reason = "refresh_backend"
+        else:
+            event = "refresh_failed"
+            severity = "warning"
+            reason = "invalid_refresh"
+        _record_security_event_or_503(
+            event,
+            request=request,
+            severity=severity,
+            reason=reason,
+        )
+        raise
+
+    try:
+        _record_security_event_or_503(
+            "refresh_success",
+            request=request,
+            username=user.username,
+            role=user.role.value,
+        )
+    except HTTPException:
+        try:
+            revoke_all_user_sessions(user)
+        except HTTPException:
+            pass
+        raise
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=next_refresh,
@@ -257,14 +295,34 @@ def refresh_token(payload: RefreshTokenRequest):
 
 
 @app.post("/logout")
-def logout(user: Annotated[User, Depends(get_current_user)]):
+def logout(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+):
     revoke_access_token(user)
+    _record_security_event_or_503(
+        "logout",
+        request=request,
+        username=user.username,
+        role=user.role.value,
+    )
     return {"estado": "sesión revocada"}
 
 
 @app.post("/logout-all")
-def logout_all(user: Annotated[User, Depends(get_current_user)]):
+def logout_all(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+):
     revoke_all_user_sessions(user)
+    _record_security_event_or_503(
+        "logout_all",
+        request=request,
+        username=user.username,
+        role=user.role.value,
+        severity="warning",
+        reason="user_requested",
+    )
     return {"estado": "todas las sesiones revocadas"}
 
 
