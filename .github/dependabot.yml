@@ -1,7 +1,18 @@
 version: 2
 updates:
   - package-ecosystem: pip
-    directory: "/"
+    directories:
+      - "/"
+      - "/api"
+      - "/cuaderno-seguridad-digital"
+      - "/escudo-privacidad-digital"
+      - "/laboratorio-huella-digital"
+      - "/libro-recuerdos-suenos"
+      - "/mi-espacio-seguro"
+      - "/organizador-emociones"
+      - "/primera-comunidad-ayuda"
+      - "/rincon-metas-crecimiento"
+      - "/semaforo-conversaciones-digitales"
     schedule:
       interval: weekly
   - package-ecosystem: github-actions
