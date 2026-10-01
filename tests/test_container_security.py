@@ -6,8 +6,7 @@ def test_dockerfile_runs_as_non_root_and_disables_uvicorn_proxy_headers():
 
     assert (
         "python:3.12.14-slim-trixie@sha256:"
-        "f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f"
-        in dockerfile
+        "f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f" in dockerfile
     )
     assert "USER 10001:10001" in dockerfile
     assert "--no-proxy-headers" in Path("scripts/container-entrypoint.sh").read_text(
