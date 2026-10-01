@@ -19,8 +19,10 @@ def configure_valid_production(monkeypatch):
         monkeypatch.setenv(name, "redis")
     monkeypatch.setenv(
         "REDIS_URL",
-        "rediss://default:secret@redis.example.org:6380/0"
-        "?ssl_cert_reqs=required&ssl_check_hostname=true",
+        "rediss://redis.example.org:6380/0"
+        "?ssl_cert_reqs=required&ssl_check_hostname=true"
+        "&ssl_certfile=/run/secrets/redis-client.crt"
+        "&ssl_keyfile=/run/secrets/redis-client.key",
     )
     monkeypatch.setenv("ALLOWED_HOSTS_JSON", '["api.example.org"]')
     monkeypatch.setenv("ALLOWED_ORIGINS_JSON", '["https://app.example.org"]')
@@ -70,7 +72,9 @@ def test_production_rejects_plaintext_redis(monkeypatch):
     configure_valid_production(monkeypatch)
     monkeypatch.setenv(
         "REDIS_URL",
-        "redis://default:secret@redis.example.org:6379/0",
+        "redis://redis.example.org:6379/0"
+        "?ssl_certfile=/run/secrets/redis-client.crt"
+        "&ssl_keyfile=/run/secrets/redis-client.key",
     )
 
     with pytest.raises(ProductionSecurityError, match="Redis"):
@@ -119,7 +123,7 @@ def test_production_database_requires_verify_full_tls(monkeypatch):
     configure_valid_production(monkeypatch)
     monkeypatch.setenv(
         "DATABASE_URL",
-        "postgresql+psycopg://user:secret@db.example.org/app?sslmode=require",
+        "postgresql+psycopg://db.example.org/app?sslmode=require",
     )
 
     with pytest.raises(ProductionSecurityError, match="verify-full"):
@@ -130,8 +134,7 @@ def test_production_accepts_postgres_verify_full(monkeypatch):
     configure_valid_production(monkeypatch)
     monkeypatch.setenv(
         "DATABASE_URL",
-        "postgresql+psycopg://user:secret@db.example.org/app"
-        "?sslmode=verify-full",
+        "postgresql+psycopg://db.example.org/app?sslmode=verify-full",
     )
 
     validate_production_security()
