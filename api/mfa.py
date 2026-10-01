@@ -103,17 +103,15 @@ def load_mfa_configs() -> dict[str, MFAConfig]:
         recovery_raw = raw_config.get("recovery_code_hashes")
         if not isinstance(secret_raw, str) or not isinstance(recovery_raw, list):
             raise MFAConfigurationError("MFA_USERS_JSON inválido")
-        if (
-            len(recovery_raw) < 4
-            or not all(isinstance(value, str) for value in recovery_raw)
+        if len(recovery_raw) < 4 or not all(
+            isinstance(value, str) for value in recovery_raw
         ):
             raise MFAConfigurationError(
                 "Cada usuario MFA necesita al menos 4 códigos de recuperación"
             )
         recovery_hashes = tuple(value.lower() for value in recovery_raw)
-        if (
-            len(set(recovery_hashes)) != len(recovery_hashes)
-            or any(not re.fullmatch(r"[0-9a-f]{64}", value) for value in recovery_hashes)
+        if len(set(recovery_hashes)) != len(recovery_hashes) or any(
+            not re.fullmatch(r"[0-9a-f]{64}", value) for value in recovery_hashes
         ):
             raise MFAConfigurationError("Hashes de recuperación inválidos")
 
@@ -207,10 +205,14 @@ class MFAStateStore:
             )
 
     def _mode(self) -> str:
-        return os.getenv(
-            "MFA_STATE_BACKEND",
-            os.getenv("SESSION_BACKEND", "memory"),
-        ).strip().lower()
+        return (
+            os.getenv(
+                "MFA_STATE_BACKEND",
+                os.getenv("SESSION_BACKEND", "memory"),
+            )
+            .strip()
+            .lower()
+        )
 
     def _selected_backend(self) -> MFAStateBackend:
         mode = self._mode()
