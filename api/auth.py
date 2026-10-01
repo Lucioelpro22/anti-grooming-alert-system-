@@ -32,6 +32,7 @@ from api.mfa import (
     verify_mfa,
 )
 from api.pseudonymization import pseudonymization_key
+from api.security_audit import validate_security_audit_configuration
 from api.session_management import (
     InvalidRefreshToken,
     RefreshReuseDetected,
@@ -165,6 +166,7 @@ def validate_configuration() -> None:
     validate_mfa_configuration(
         {username: (user.role.value, user.disabled) for username, user in users.items()}
     )
+    validate_security_audit_configuration()
     validate_encryption_keys()
 
 
