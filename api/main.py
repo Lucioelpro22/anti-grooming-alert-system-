@@ -28,6 +28,7 @@ from api.auth import (
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
 from api.retention import EvidenceStatus
+from api.runtime_secrets import load_runtime_secrets
 from api.security import (
     REPORT_LIMITER,
     ApiShieldMiddleware,
@@ -38,10 +39,16 @@ from api.security import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.ready = False
+    load_runtime_secrets()
     validate_configuration()
     report_generator.verificar_auditoria()
     security_audit.verify_security_audit()
-    yield
+    app.state.ready = True
+    try:
+        yield
+    finally:
+        app.state.ready = False
 
 
 app = FastAPI(
@@ -491,6 +498,21 @@ def cambiar_estado_informe(
             status_code=409, detail="Cambio de estado no permitido"
         ) from exc
     return EstadoInforme(estado=estado)
+
+
+@app.get("/health/live")
+async def health_live():
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready(request: Request):
+    if not getattr(request.app.state, "ready", False):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio no listo",
+        )
+    return {"status": "ready"}
 
 
 @app.get("/estado")
