@@ -8,8 +8,8 @@ from pwdlib import PasswordHash
 from api import report_generator
 from api.auth import LOGIN_LIMITER, SESSIONS, TOKEN_REVOCATIONS
 from api.mfa import (
-    MFAConfigurationError,
     MFA_STATE,
+    MFAConfigurationError,
     MFAStateStore,
     recovery_code_hash,
     totp_code,
