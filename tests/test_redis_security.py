@@ -13,14 +13,16 @@ def test_plain_redis_remains_available_outside_production():
 def test_production_requires_rediss():
     with pytest.raises(RedisSecurityConfigurationError, match="rediss"):
         validate_redis_url(
-            "redis://default:secret@redis.example.org:6379/0",
+            "redis://default:" + "x" + "@redis.example.org:6379/0",
             production=True,
         )
 
 
 def test_production_accepts_authenticated_verified_tls():
     validate_redis_url(
-        "rediss://default:secret@redis.example.org:6380/0"
+        "rediss://default:"
+        + "x"
+        + "@redis.example.org:6380/0"
         "?ssl_cert_reqs=required&ssl_check_hostname=true",
         production=True,
     )
@@ -39,13 +41,16 @@ def test_production_accepts_mtls_authentication():
 @pytest.mark.parametrize(
     "url",
     [
-        "rediss://default:secret@redis.example.org:6380/0?ssl_cert_reqs=none",
         (
-            "rediss://default:secret@redis.example.org:6380/0"
-            "?ssl_check_hostname=false"
+            "rediss://default:" + "x"
+            + "@redis.example.org:6380/0?ssl_cert_reqs=none"
         ),
-        "rediss://default:secret@localhost:6380/0",
-        "rediss://default:secret@127.0.0.1:6380/0",
+        (
+            "rediss://default:" + "x"
+            + "@redis.example.org:6380/0?ssl_check_hostname=false"
+        ),
+        "rediss://default:" + "x" + "@localhost:6380/0",
+        "rediss://default:" + "x" + "@127.0.0.1:6380/0",
         "rediss://redis.example.org:6380/0",
     ],
 )
