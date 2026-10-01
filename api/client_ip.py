@@ -215,7 +215,9 @@ def _is_trusted(
         parsed = ipaddress.ip_address(_canonical_address(address))
     except ValueError:
         return False
-    return any(parsed.version == network.version and parsed in network for network in networks)
+    return any(
+        parsed.version == network.version and parsed in network for network in networks
+    )
 
 
 def _resolve_chain(
@@ -260,9 +262,7 @@ def resolve_client_ip(
     if mode == "x-forwarded-for":
         values = _header_values(raw_headers, b"x-forwarded-for")
         if not values:
-            raise ClientIPResolutionError(
-                "Proxy confiable sin X-Forwarded-For"
-            )
+            raise ClientIPResolutionError("Proxy confiable sin X-Forwarded-For")
         address = _resolve_chain(
             _parse_x_forwarded_for(values),
             peer_ip,
