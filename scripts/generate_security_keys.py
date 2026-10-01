@@ -8,3 +8,4 @@ def generate_key() -> str:
 
 print(f"EVIDENCE_ENCRYPTION_KEY={generate_key()}")
 print(f"AUDIT_HMAC_KEY={generate_key()}")
+print(f"PSEUDONYMIZATION_HMAC_KEY={generate_key()}")
