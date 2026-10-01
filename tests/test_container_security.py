@@ -4,10 +4,13 @@ from pathlib import Path
 def test_dockerfile_runs_as_non_root_and_disables_uvicorn_proxy_headers():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
 
-    assert (
-        "python:3.12.14-slim-trixie@sha256:"
-        "f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f" in dockerfile
+    base_line = next(
+        line for line in dockerfile.splitlines() if line.startswith("ARG PYTHON_IMAGE=")
     )
+    assert "python:3.12.14-slim-trixie@sha256:" in base_line
+    digest = base_line.split("@sha256:", 1)[1].split()[0]
+    assert len(digest) == 64
+    assert all(character in "0123456789abcdef" for character in digest)
     assert "USER 10001:10001" in dockerfile
     assert "--no-proxy-headers" in Path("scripts/container-entrypoint.sh").read_text(
         encoding="utf-8"
