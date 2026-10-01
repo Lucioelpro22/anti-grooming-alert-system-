@@ -227,8 +227,8 @@ def test_issued_token_contains_signing_key_id(client):
 def test_jwt_rotation_keeps_legacy_token_valid_until_key_is_retired(
     client, monkeypatch
 ):
-    legacy_secret = "test-secret-that-is-longer-than-32-bytes"
-    rotated_secret = "rotated-test-secret-that-is-longer-than-32-bytes"
+    legacy_secret = "test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
+    rotated_secret = "rotated-test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
     now = datetime.now(timezone.utc)
     legacy_token = jwt.encode(
         {
@@ -292,9 +292,7 @@ def test_unknown_jwt_kid_is_rejected(client):
 
 def test_invalid_jwt_keyring_fails_closed(client, monkeypatch):
     monkeypatch.setenv("JWT_SECRETS_JSON", "not-json")
-    response = client.post(
-        "/token", data={"username": "admin", "password": PASSWORD}
-    )
+    response = client.post("/token", data={"username": "admin", "password": PASSWORD})
     assert response.status_code == 503
 
 
