@@ -86,9 +86,7 @@ def mfa_client(monkeypatch, tmp_path):
     monkeypatch.setenv(
         "SECURITY_AUDIT_STATE_DB",
         str(
-            tmp_path.parent
-            / (tmp_path.name + "-security-state")
-            / "checkpoint.sqlite"
+            tmp_path.parent / (tmp_path.name + "-security-state") / "checkpoint.sqlite"
         ),
     )
 
