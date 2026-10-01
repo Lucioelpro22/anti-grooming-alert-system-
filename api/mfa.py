@@ -15,6 +15,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from api.production_security import is_production
+from api.redis_security import (
+    RedisSecurityConfigurationError,
+    create_redis_client,
+    validate_redis_url,
+)
+
 
 class MFAConfigurationError(RuntimeError):
     """MFA configuration is missing or invalid."""
@@ -199,10 +206,16 @@ class MFAStateStore:
         mode = self._mode()
         if mode not in {"memory", "redis"}:
             raise MFAConfigurationError("MFA_STATE_BACKEND debe ser 'memory' o 'redis'")
-        if mode == "redis" and not os.getenv("REDIS_URL", "").strip():
-            raise MFAConfigurationError(
-                "REDIS_URL es obligatorio cuando MFA_STATE_BACKEND=redis"
-            )
+        if mode == "redis":
+            url = os.getenv("REDIS_URL", "").strip()
+            if not url:
+                raise MFAConfigurationError(
+                    "REDIS_URL es obligatorio cuando MFA_STATE_BACKEND=redis"
+                )
+            try:
+                validate_redis_url(url, production=is_production())
+            except RedisSecurityConfigurationError as exc:
+                raise MFAConfigurationError("REDIS_URL insegura o inválida") from exc
 
     def _mode(self) -> str:
         return (
@@ -226,10 +239,8 @@ class MFAStateStore:
             raise MFABackendUnavailable("REDIS_URL requerido para MFA Redis")
         if self._redis_backend is None or self._redis_url != url:
             try:
-                import redis  # type: ignore[import-not-found]
-
-                client = redis.Redis.from_url(url, decode_responses=True)
-            except (ImportError, ValueError) as exc:
+                client = create_redis_client(url, production=is_production())
+            except RedisSecurityConfigurationError as exc:
                 raise MFABackendUnavailable("Redis MFA no disponible") from exc
             self._redis_backend = RedisMFAStateBackend(client)
             self._redis_url = url

@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from api.detect_patterns import evaluar_texto, identificar_perfil
 from api.ip_analysis import analizar_ip
 from api.key_management import current_key
@@ -10,6 +12,7 @@ from api.pseudonymization import pseudonymize
 from api.rate_limit_backend import RedisRateLimitBackend
 from api.report_generator import leer_informe
 from api.retention import EvidenceStatus, can_transition, retention_deadline
+from api.security import RateLimitBackendUnavailable, SlidingWindowRateLimiter
 
 
 def test_critical_multi_indicator_message():
@@ -108,3 +111,12 @@ def test_redis_rate_limit_backend_uses_atomic_pipeline():
     result = RedisRateLimitBackend(Client()).check("user", 1, 60)
     assert not result.allowed
     assert result.retry_after == 60
+
+
+def test_http_rate_limiter_fails_closed_when_redis_is_unavailable(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_BACKEND", "redis")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    limiter = SlidingWindowRateLimiter()
+
+    with pytest.raises(RateLimitBackendUnavailable):
+        limiter.check("client")

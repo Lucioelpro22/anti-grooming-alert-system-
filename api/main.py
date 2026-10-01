@@ -28,7 +28,12 @@ from api.auth import (
 )
 from api.jurisdictions import JurisdictionNotConfiguredError, get_policy
 from api.retention import EvidenceStatus
-from api.security import REPORT_LIMITER, ApiShieldMiddleware, env_list
+from api.security import (
+    REPORT_LIMITER,
+    ApiShieldMiddleware,
+    RateLimitBackendUnavailable,
+    env_list,
+)
 
 
 @asynccontextmanager
@@ -391,7 +396,13 @@ def analizar_mensaje(
         User, Depends(require_roles(Role.ADMIN, Role.ANALYST, Role.SUPERVISOR))
     ],
 ):
-    rate = REPORT_LIMITER.check(user.username)
+    try:
+        rate = REPORT_LIMITER.check(user.username)
+    except RateLimitBackendUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Control de tráfico no disponible",
+        ) from exc
     if not rate.allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

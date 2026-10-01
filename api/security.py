@@ -9,10 +9,20 @@ from dataclasses import dataclass
 
 from starlette.types import Message, Receive, Scope, Send
 
+from api.production_security import is_production
 from api.rate_limit_backend import RedisRateLimitBackend
+from api.redis_security import (
+    RedisSecurityConfigurationError,
+    create_redis_client,
+    validate_redis_url,
+)
 
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
+
+
+class RateLimitBackendUnavailable(RuntimeError):
+    """Distributed HTTP rate-limit state cannot be consulted safely."""
 
 
 def env_list(name: str, default: list[str]) -> list[str]:
@@ -57,21 +67,31 @@ class SlidingWindowRateLimiter:
         self._requests: dict[str, list[float]] = {}
         self._lock = threading.Lock()
         self._distributed_backend: RedisRateLimitBackend | None = None
+        self._distributed_url: str | None = None
 
     def _redis_backend(self) -> RedisRateLimitBackend | None:
-        if os.getenv("RATE_LIMIT_BACKEND", "memory").lower() != "redis":
+        mode = os.getenv("RATE_LIMIT_BACKEND", "memory").strip().lower()
+        if mode == "memory":
             return None
-        if self._distributed_backend is None:
-            url = os.getenv("REDIS_URL")
-            if not url:
-                return None
+        if mode != "redis":
+            raise RateLimitBackendUnavailable(
+                "RATE_LIMIT_BACKEND debe ser 'memory' o 'redis'"
+            )
+        url = os.getenv("REDIS_URL", "").strip()
+        if not url:
+            raise RateLimitBackendUnavailable(
+                "REDIS_URL requerido para rate limiting distribuido"
+            )
+        if self._distributed_backend is None or self._distributed_url != url:
             try:
-                import redis  # type: ignore[import-not-found]
-
-                client = redis.Redis.from_url(url, decode_responses=True)
-                self._distributed_backend = RedisRateLimitBackend(client)
-            except (ImportError, ValueError):
-                return None
+                validate_redis_url(url, production=is_production())
+                client = create_redis_client(url, production=is_production())
+            except RedisSecurityConfigurationError as exc:
+                raise RateLimitBackendUnavailable(
+                    "Rate limit Redis no disponible"
+                ) from exc
+            self._distributed_backend = RedisRateLimitBackend(client)
+            self._distributed_url = url
         return self._distributed_backend
 
     def check(self, key: str) -> RateLimitResult:
@@ -80,8 +100,10 @@ class SlidingWindowRateLimiter:
             try:
                 result = backend.check(key, self.attempts, self.window_seconds)
                 return RateLimitResult(result.allowed, result.retry_after)
-            except Exception:  # noqa: BLE001
-                return RateLimitResult(False, self.window_seconds)
+            except Exception as exc:
+                raise RateLimitBackendUnavailable(
+                    "Rate limit Redis no disponible"
+                ) from exc
         now = time.monotonic()
         cutoff = now - self.window_seconds
         with self._lock:
@@ -107,6 +129,8 @@ class SlidingWindowRateLimiter:
     def clear(self) -> None:
         with self._lock:
             self._requests.clear()
+        self._distributed_backend = None
+        self._distributed_url = None
 
 
 API_LIMITER = SlidingWindowRateLimiter()
@@ -181,7 +205,15 @@ class ApiShieldMiddleware:
         client_host = client[0] if client else "unknown"
         API_LIMITER.attempts = env_positive_int("API_RATE_LIMIT", 120)
         API_LIMITER.window_seconds = env_positive_int("API_RATE_WINDOW_SECONDS", 60)
-        rate = API_LIMITER.check(client_host)
+        try:
+            rate = API_LIMITER.check(client_host)
+        except RateLimitBackendUnavailable:
+            await self._reject(
+                503,
+                "Control de tráfico no disponible",
+                secure_send,
+            )
+            return
         if not rate.allowed:
             await self._reject(
                 429,

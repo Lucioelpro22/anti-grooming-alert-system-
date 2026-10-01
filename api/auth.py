@@ -37,6 +37,7 @@ from api.mfa import (
     validate_mfa_configuration,
     verify_mfa,
 )
+from api.production_security import validate_production_security
 from api.pseudonymization import pseudonymization_key
 from api.security_audit import (
     SecurityAuditError,
@@ -167,6 +168,7 @@ def validate_encryption_keys() -> None:
 
 
 def validate_configuration() -> None:
+    validate_production_security()
     TOKEN_REVOCATIONS.validate_configuration()
     SESSIONS.validate_configuration()
     LOGIN_LIMITER.validate_configuration()
