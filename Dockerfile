@@ -27,10 +27,7 @@ ENV VIRTUAL_ENV=/opt/venv \
     TMPDIR=/tmp \
     PORT=8000
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 10001 app \
+RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --no-create-home \
         --home-dir /nonexistent --shell /usr/sbin/nologin app \
     && mkdir -p \
@@ -47,8 +44,8 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=10001:10001 api /app/api
-COPY --chown=10001:10001 scripts /app/scripts
+COPY --chown=0:0 api /app/api
+COPY --chown=0:0 scripts /app/scripts
 
 # Package-management/build tooling is not needed by the running service.
 # Remove it from both the application venv and the base interpreter to reduce
@@ -56,11 +53,14 @@ COPY --chown=10001:10001 scripts /app/scripts
 RUN /opt/venv/bin/python -m pip uninstall -y setuptools urllib3 msgpack \
     && /opt/venv/bin/python -m pip uninstall -y pip \
     && /usr/local/bin/python -m pip uninstall -y setuptools urllib3 msgpack \
-    && /usr/local/bin/python -m pip uninstall -y pip
+    && /usr/local/bin/python -m pip uninstall -y pip \
+    && chmod -R a-w /app/api /app/scripts /opt/venv
 
 USER 10001:10001
 
 EXPOSE 8000
+
+STOPSIGNAL SIGTERM
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import os,urllib.request; p=os.getenv('PORT','8000'); h=os.getenv('HEALTHCHECK_HOST','localhost'); r=urllib.request.Request(f'http://127.0.0.1:{p}/health/ready',headers={'Host':h}); urllib.request.urlopen(r,timeout=3).read()" || exit 1
