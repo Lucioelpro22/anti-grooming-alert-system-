@@ -15,6 +15,7 @@ from api.security import API_LIMITER, REPORT_LIMITER
 PASSWORD = "correct-horse-battery-staple"  # pragma: allowlist secret
 EVIDENCE_KEY = base64.urlsafe_b64encode(b"e" * 32).decode("ascii")
 AUDIT_KEY = base64.urlsafe_b64encode(b"a" * 32).decode("ascii")
+PSEUDONYM_KEY = base64.urlsafe_b64encode(b"p" * 32).decode("ascii")
 
 
 @pytest.fixture()
@@ -50,6 +51,7 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("AUTH_USERS_JSON", json.dumps(users))
     monkeypatch.setenv("EVIDENCE_ENCRYPTION_KEY", EVIDENCE_KEY)
     monkeypatch.setenv("AUDIT_HMAC_KEY", AUDIT_KEY)
+    monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", PSEUDONYM_KEY)
     monkeypatch.setenv("ALLOWED_ORIGINS_JSON", '["https://app.example.org"]')
     monkeypatch.setenv("ALLOWED_HOSTS_JSON", '["testserver"]')
     monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "65536")
