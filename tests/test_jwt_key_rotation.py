@@ -78,3 +78,24 @@ def test_current_key_id_must_exist(monkeypatch):
 
     with pytest.raises(JWTKeyConfigurationError, match="CURRENT_KEY_ID"):
         current_jwt_key()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        json.dumps({"v2": 1234567890123456789012345678901234567890}),
+        json.dumps(
+            {
+                "v2": (
+                    "INSECURE_EXAMPLE_DO_NOT_USE_IN_PRODUCTION_"
+                    "GENERATE_NEW_SECRET_WITH_OPENSSL"
+                )
+            }
+        ),
+    ],
+)
+def test_non_string_or_example_jwt_secrets_are_rejected(monkeypatch, raw):
+    monkeypatch.setenv("JWT_SECRETS_JSON", raw)
+
+    with pytest.raises(JWTKeyConfigurationError):
+        load_jwt_keyring()
