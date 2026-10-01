@@ -83,6 +83,21 @@ checkpoints de auditoría sin imprimir secretos.
 
 ➡️ [Guía completa de hardening de producción](docs/PRODUCTION_SECURITY.md)
 
+## Contenedor endurecido y supply chain
+
+El servicio principal ya incluye `Dockerfile` multi-stage,
+`compose.production.yml`, secretos montados mediante variables `*_FILE`,
+health/readiness, usuario non-root fijo y root filesystem read-only en el perfil
+de producción. Uvicorn se inicia con `--no-proxy-headers` para que la única
+autoridad sobre IP real siga siendo el resolver de trusted proxies de la API.
+
+La CI construye y escanea la imagen, genera un SBOM SPDX y bloquea
+vulnerabilidades HIGH/CRITICAL corregibles. La publicación a GHCR queda en un
+workflow manual separado con SBOM, provenance y attestation; un push normal no
+publica imágenes.
+
+➡️ [Hardening completo de runtime y producción](docs/PRODUCTION_SECURITY.md)
+
 ## Seguridad V3.2
 
 La API usa OAuth2 con tokens JWT de corta duración, contraseñas Argon2 y roles

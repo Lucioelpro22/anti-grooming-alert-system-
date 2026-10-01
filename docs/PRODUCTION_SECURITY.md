@@ -104,6 +104,60 @@ Invalid proxy configuration fails closed. The resolved address is used
 consistently by global rate limiting, login/password-spraying detection, and the
 pseudonymized authentication security audit.
 
+## Hardened container runtime
+
+The repository includes a multi-stage `Dockerfile` and
+`compose.production.yml` intended as a secure baseline for one API worker per
+container.
+
+The image uses a fixed Python patch release, runs as UID/GID `10001`, disables
+Uvicorn's native proxy-header rewriting, removes the default Uvicorn server
+header, and runs the production preflight before starting the server.
+
+The production Compose profile applies:
+
+- a read-only root filesystem;
+- `cap_drop: ALL`;
+- `no-new-privileges`;
+- explicit CPU, memory, and PID limits;
+- a small `/tmp` tmpfs with `noexec,nosuid,nodev`;
+- writable named volumes only for encrypted evidence and audit/checkpoint state;
+- host-loopback-only port publication by default;
+- secrets mounted under `/run/secrets` instead of embedded in the Compose file.
+
+Sensitive configuration supports `<NAME>_FILE`. For example,
+`JWT_SECRET_FILE=/run/secrets/jwt_secret` loads the file during startup. Setting
+both `JWT_SECRET` and `JWT_SECRET_FILE` is rejected to avoid ambiguous secret
+sources. The same mechanism covers users/MFA material, evidence and audit keys,
+pseudonymization key, Redis URL, and optional database URL.
+
+The health endpoints are:
+
+- `GET /health/live`: process liveness;
+- `GET /health/ready`: readiness after secret loading, configuration checks,
+  and both audit integrity checks have completed.
+
+Set `HEALTHCHECK_HOST` to an exact value present in
+`ALLOWED_HOSTS_JSON`. The image healthcheck calls readiness over loopback and
+supplies that Host header.
+
+Do not mount the Docker socket into the API container. Do not add
+`privileged: true`, extra Linux capabilities, or writable root filesystem
+access to work around permission problems. Fix ownership of persistent mounts
+for UID/GID `10001` instead.
+
+### Container supply chain
+
+`.github/workflows/container-security.yml` builds the image for every PR/main
+security change, verifies the runtime UID, generates an SPDX JSON SBOM, and runs
+Trivy against HIGH/CRITICAL vulnerabilities. The SBOM is retained as a CI
+artifact.
+
+`.github/workflows/container-release.yml` is intentionally manual. When
+invoked with a release tag it publishes to GHCR with BuildKit SBOM/provenance
+enabled and creates a GitHub build-provenance attestation. No container is
+published automatically from ordinary pushes or pull requests.
+
 ## Authentication and MFA
 
 Production requires MFA policy coverage for `admin`, `supervisor`, and
