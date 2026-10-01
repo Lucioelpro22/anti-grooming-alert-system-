@@ -74,6 +74,32 @@ debe configurarse `TOKEN_REVOCATION_BACKEND=redis` junto con `REDIS_URL`.
 Si el backend distribuido de revocación no está disponible, la validación de
 tokens falla cerrada en lugar de aceptar un JWT cuya revocación no pueda comprobarse.
 
+### Rotación de la clave de firma JWT
+
+La API admite un key-ring versionado para rotar la clave HS256 sin invalidar de
+golpe todas las sesiones activas. Los tokens nuevos incluyen un encabezado
+`kid`; los tokens anteriores a este mecanismo, que no tienen `kid`, usan el ID
+reservado `legacy`.
+
+Para rotar desde una instalación que usa `JWT_SECRET`:
+
+1. Generá un secreto nuevo con `python scripts/generate_jwt_secret.py`.
+2. Configurá `JWT_SECRETS_JSON` con el secreto actual bajo `legacy` y el nuevo
+   bajo otro ID, por ejemplo
+   `{"legacy":"SECRETO_ANTERIOR","v2":"SECRETO_NUEVO"}`.
+3. Configurá `JWT_CURRENT_KEY_ID=v2`. Desde ese momento los tokens nuevos salen
+   firmados con `v2`, mientras los anteriores siguen verificándose con `legacy`.
+4. Conservá la clave anterior al menos durante el TTL máximo de los tokens emitidos
+   con ella. En la configuración actual los access tokens duran 15 minutos.
+5. Pasada esa ventana, podés retirar `legacy` si ya no necesitás verificar tokens
+   antiguos. Un token que referencia un `kid` retirado se rechaza con 401.
+6. No reutilices el mismo secreto bajo varios IDs. Una key-ring inválida o sin
+   clave activa hace que la autenticación falle cerrada con 503.
+
+En rotaciones posteriores, agregá un nuevo ID, cambialo en
+`JWT_CURRENT_KEY_ID` y conservá temporalmente las claves anteriores hasta que
+caduquen todos los tokens firmados con ellas.
+
 Los informes se almacenan cifrados con AES-256-GCM. Sus metadatos están
 autenticados y cada creación, lectura o acceso denegado se registra en una
 cadena de auditoría firmada con HMAC-SHA256. Las escrituras son atómicas y el
@@ -86,7 +112,9 @@ cabeceras defensivas, y mantiene CORS cerrado salvo los orígenes declarados.
 Antes de iniciar la API:
 
 1. Copiá `.env.example` a un archivo local `.env` que nunca debe subirse.
-2. Generá `JWT_SECRET` con `openssl rand -hex 32`.
+2. Generá `JWT_SECRET` con `openssl rand -hex 32` o
+   `python scripts/generate_jwt_secret.py`. Para rotación sin corte de sesiones,
+   usá `JWT_SECRETS_JSON` y `JWT_CURRENT_KEY_ID`.
 3. Generá hashes con `python scripts/hash_password.py`.
 4. Definí los usuarios en `AUTH_USERS_JSON` usando únicamente hashes Argon2.
 5. Ejecutá `python scripts/generate_security_keys.py` y guardá las tres claves

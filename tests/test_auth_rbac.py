@@ -219,6 +219,87 @@ def test_tampered_token_is_rejected(client):
     assert response.status_code == 401
 
 
+def test_issued_token_contains_signing_key_id(client):
+    access_token = token(client, "analyst-a")
+    assert jwt.get_unverified_header(access_token)["kid"] == "legacy"
+
+
+def test_jwt_rotation_keeps_legacy_token_valid_until_key_is_retired(
+    client, monkeypatch
+):
+    legacy_secret = (
+        "test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
+    )
+    rotated_secret = (
+        "rotated-test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
+    )
+    now = datetime.now(timezone.utc)
+    legacy_token = jwt.encode(
+        {
+            "sub": "analyst-a",
+            "role": "analyst",
+            "iat": now,
+            "nbf": now,
+            "exp": now + timedelta(minutes=10),
+            "jti": "legacy-rotation-token",
+            "iss": JWT_ISSUER,
+            "aud": JWT_AUDIENCE,
+        },
+        legacy_secret,
+        algorithm="HS256",
+    )
+
+    monkeypatch.setenv(
+        "JWT_SECRETS_JSON",
+        json.dumps({"legacy": legacy_secret, "v2": rotated_secret}),
+    )
+    monkeypatch.setenv("JWT_CURRENT_KEY_ID", "v2")
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+
+    legacy_headers = {"Authorization": f"Bearer {legacy_token}"}
+    assert client.get("/informe/deadbeef", headers=legacy_headers).status_code == 404
+
+    rotated_token = token(client, "analyst-a")
+    assert jwt.get_unverified_header(rotated_token)["kid"] == "v2"
+    rotated_headers = {"Authorization": f"Bearer {rotated_token}"}
+    assert client.get("/informe/deadbeef", headers=rotated_headers).status_code == 404
+
+    monkeypatch.setenv("JWT_SECRETS_JSON", json.dumps({"v2": rotated_secret}))
+    assert client.get("/informe/deadbeef", headers=legacy_headers).status_code == 401
+    assert client.get("/informe/deadbeef", headers=rotated_headers).status_code == 404
+
+
+def test_unknown_jwt_kid_is_rejected(client):
+    secret = "test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
+    now = datetime.now(timezone.utc)
+    forged_header_token = jwt.encode(
+        {
+            "sub": "analyst-a",
+            "role": "analyst",
+            "iat": now,
+            "nbf": now,
+            "exp": now + timedelta(minutes=10),
+            "jti": "unknown-kid-token",
+            "iss": JWT_ISSUER,
+            "aud": JWT_AUDIENCE,
+        },
+        secret,
+        algorithm="HS256",
+        headers={"kid": "unknown"},
+    )
+    response = client.get(
+        "/informe/deadbeef",
+        headers={"Authorization": f"Bearer {forged_header_token}"},
+    )
+    assert response.status_code == 401
+
+
+def test_invalid_jwt_keyring_fails_closed(client, monkeypatch):
+    monkeypatch.setenv("JWT_SECRETS_JSON", "not-json")
+    response = client.post("/token", data={"username": "admin", "password": PASSWORD})
+    assert response.status_code == 503
+
+
 def test_expired_token_is_rejected(client):
     now = datetime.now(timezone.utc)
     expired = jwt.encode(

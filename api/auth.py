@@ -18,6 +18,12 @@ from pwdlib import PasswordHash
 
 from api.audit_key_management import current_audit_key, load_audit_keyring
 from api.audit_state import EvidenceSecurityError
+from api.jwt_key_management import (
+    JWTKeyConfigurationError,
+    JWTKeyNotFound,
+    current_jwt_key,
+    jwt_key_for,
+)
 from api.key_management import current_key, load_keyring
 from api.pseudonymization import pseudonymization_key
 from api.token_revocation import (
@@ -58,11 +64,6 @@ ACCESS_TOKEN_MINUTES = 15
 TOKEN_REVOCATIONS = TokenRevocationStore()
 
 # Known example/placeholder values that must never be used in production
-BLACKLISTED_SECRETS = {
-    "replace-with-at-least-32-random-characters",
-    "insecure_example_do_not_use_in_production_generate_new_secret_with_openssl",
-}
-
 BLACKLISTED_PASSWORD_HASHES = {
     "$argon2id$REPLACE_ME",
     "$argon2id$v=19$m=65540,t=3,p=4$REPLACE_WITH_ACTUAL_HASH$REPLACE_WITH_ACTUAL_HASH",
@@ -76,19 +77,15 @@ BLACKLISTED_KEYS = {
 
 
 def _jwt_secret() -> str:
-    secret = os.getenv("JWT_SECRET", "")
-    if len(secret) < 32:
+    """Backwards-compatible accessor for the current JWT signing secret."""
+
+    try:
+        return current_jwt_key()[1]
+    except JWTKeyConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Autenticación no configurada",
-        )
-    # Reject known example/placeholder values
-    if secret.lower() in BLACKLISTED_SECRETS:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="JWT_SECRET usa valor de ejemplo — reemplazar con secreto seguro generado",
-        )
-    return secret
+            detail=f"JWT_SECRET/JWT_SECRETS_JSON inválido: {exc}",
+        ) from exc
 
 
 def load_users() -> dict[str, StoredUser]:
@@ -176,7 +173,19 @@ def create_access_token(user: User) -> tuple[str, int]:
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
     }
-    token = jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
+    try:
+        key_id, signing_key = current_jwt_key()
+    except JWTKeyConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"JWT_SECRET/JWT_SECRETS_JSON inválido: {exc}",
+        ) from exc
+    token = jwt.encode(
+        payload,
+        signing_key,
+        algorithm=JWT_ALGORITHM,
+        headers={"kid": key_id},
+    )
     return token, int((expires - now).total_seconds())
 
 
@@ -187,9 +196,23 @@ def decode_access_token(token: str) -> User:
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") != JWT_ALGORITHM:
+            raise InvalidTokenError
+        raw_key_id = header.get("kid")
+        if raw_key_id is None:
+            key_id = "legacy"
+        elif not isinstance(raw_key_id, str) or not raw_key_id or len(raw_key_id) > 64:
+            raise InvalidTokenError
+        else:
+            key_id = raw_key_id
+        try:
+            verification_key = jwt_key_for(key_id)
+        except JWTKeyNotFound as exc:
+            raise InvalidTokenError from exc
         payload = jwt.decode(
             token,
-            _jwt_secret(),
+            verification_key,
             algorithms=[JWT_ALGORITHM],
             audience=JWT_AUDIENCE,
             issuer=JWT_ISSUER,
@@ -218,6 +241,11 @@ def decode_access_token(token: str) -> User:
             ) from exc
         if revoked:
             raise InvalidTokenError
+    except JWTKeyConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"JWT_SECRET/JWT_SECRETS_JSON inválido: {exc}",
+        ) from exc
     except (InvalidTokenError, ValueError) as exc:
         raise credentials_error from exc
 
