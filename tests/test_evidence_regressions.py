@@ -25,6 +25,9 @@ def storage(tmp_path, monkeypatch):
     monkeypatch.setenv("AUDIT_STATE_DB", str(tmp_path / "state" / "audit.sqlite"))
     monkeypatch.setenv("EVIDENCE_ENCRYPTION_KEY", base64.b64encode(b"e" * 32).decode())
     monkeypatch.setenv("AUDIT_HMAC_KEY", base64.b64encode(b"a" * 32).decode())
+    monkeypatch.setenv(
+        "PSEUDONYMIZATION_HMAC_KEY", base64.b64encode(b"p" * 32).decode()
+    )
     return folder
 
 
@@ -116,6 +119,23 @@ def test_identical_keys_rejected(storage, monkeypatch):
         validate_encryption_keys()
 
 
+@pytest.mark.parametrize("duplicate_of", ["EVIDENCE_ENCRYPTION_KEY", "AUDIT_HMAC_KEY"])
+def test_pseudonymization_key_must_be_independent(storage, monkeypatch, duplicate_of):
+    monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", os.environ[duplicate_of])
+    with pytest.raises(RuntimeError):
+        validate_encryption_keys()
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "not-base64", base64.b64encode(b"short").decode()],
+)
+def test_invalid_pseudonymization_key_rejected(storage, monkeypatch, value):
+    monkeypatch.setenv("PSEUDONYMIZATION_HMAC_KEY", value)
+    with pytest.raises(RuntimeError):
+        validate_encryption_keys()
+
+
 def test_example_secret_rejected_before_startup(storage, monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "replace-with-at-least-32-random-characters")
     with pytest.raises(HTTPException, match="JWT_SECRET"):
@@ -123,7 +143,13 @@ def test_example_secret_rejected_before_startup(storage, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "variable", ["EVIDENCE_ENCRYPTION_KEY", "AUDIT_HMAC_KEY", "AUDIT_STATE_DB"]
+    "variable",
+    [
+        "EVIDENCE_ENCRYPTION_KEY",
+        "AUDIT_HMAC_KEY",
+        "PSEUDONYMIZATION_HMAC_KEY",
+        "AUDIT_STATE_DB",
+    ],
 )
 def test_startup_refuses_missing_configuration(storage, monkeypatch, variable):
     from api.auth import DUMMY_PASSWORD_HASH
