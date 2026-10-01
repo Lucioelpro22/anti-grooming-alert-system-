@@ -196,7 +196,13 @@ def validate_security_audit_configuration() -> None:
     state = _state_path()
     if state == log_dir:
         raise SecurityAuditError("Configuración de auditoría de seguridad inválida")
-    current_audit_key()
+    try:
+        current_audit_key()
+        pseudonymize("security-audit-self-test")
+    except RuntimeError as exc:
+        raise SecurityAuditError(
+            "Configuración criptográfica de auditoría de seguridad inválida"
+        ) from exc
 
 
 def verify_security_audit() -> dict[str, Any]:
@@ -250,17 +256,27 @@ def record_security_event(
     ):
         raise ValueError("Motivo de seguridad inválido")
 
-    subject = (
-        pseudonymize(f"security-user:{username.strip().lower()}")
-        if username and username.strip()
-        else None
-    )
-    ip_ref, user_agent_ref, request_id = _request_context(request)
+    try:
+        subject = (
+            pseudonymize(f"security-user:{username.strip().lower()}")
+            if username and username.strip()
+            else None
+        )
+        ip_ref, user_agent_ref, request_id = _request_context(request)
+    except RuntimeError as exc:
+        raise SecurityAuditError(
+            "No se pudo seudonimizar el evento de seguridad"
+        ) from exc
 
     with _transaction() as connection:
         entries = _read_verified(connection)
         previous_hash = entries[-1]["entry_hash"] if entries else "0" * 64
-        key_id, key = current_audit_key()
+        try:
+            key_id, key = current_audit_key()
+        except RuntimeError as exc:
+            raise SecurityAuditError(
+                "Clave de auditoría de seguridad no disponible"
+            ) from exc
         entry: dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event": event,
