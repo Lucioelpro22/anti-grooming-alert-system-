@@ -88,9 +88,7 @@ class MemoryLoginRateLimitBackend:
         for key in stale:
             self._states.pop(key, None)
 
-    def check(
-        self, key: str, policy: LoginRateLimitPolicy
-    ) -> LoginRateLimitDecision:
+    def check(self, key: str, policy: LoginRateLimitPolicy) -> LoginRateLimitDecision:
         now = time.monotonic()
         with self._lock:
             state = self._states.get(key)
@@ -134,8 +132,7 @@ class MemoryLoginRateLimitBackend:
                 state.penalty_level += 1
                 delay = min(
                     policy.backoff_max_seconds,
-                    policy.backoff_base_seconds
-                    * (2 ** (state.penalty_level - 1)),
+                    policy.backoff_base_seconds * (2 ** (state.penalty_level - 1)),
                 )
                 state.block_until = max(state.block_until, now + delay)
 
