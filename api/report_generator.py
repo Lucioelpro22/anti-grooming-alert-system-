@@ -15,6 +15,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from api import audit_state
+from api.audit_key_management import audit_key_for, current_audit_key
 from api.audit_state import EvidenceSecurityError
 from api.detect_patterns import RiskAnalysis
 from api.key_management import current_key, key_for
@@ -89,7 +90,6 @@ def _read_verified_audit(*, check_checkpoint: bool = True) -> list[dict[str, Any
         if check_checkpoint:
             audit_state.verify(CARPETA_INFORMES, 0, "0" * 64)
         return []
-    key = _decode_key("AUDIT_HMAC_KEY")
     previous_hash = "0" * 64
     entries: list[dict[str, Any]] = []
     try:
@@ -104,7 +104,12 @@ def _read_verified_audit(*, check_checkpoint: bool = True) -> list[dict[str, Any
             raise EvidenceSecurityError("Registro de auditoría corrupto") from exc
         if entry.get("previous_hash") != previous_hash:
             raise EvidenceSecurityError("Cadena de auditoría inválida")
-        expected = hmac.new(key, _canonical(entry), hashlib.sha256).hexdigest()
+        audit_key_id = entry.get("audit_key_id", "legacy")
+        if not isinstance(audit_key_id, str) or not audit_key_id:
+            raise EvidenceSecurityError("Registro de auditoría corrupto")
+        expected = hmac.new(
+            audit_key_for(audit_key_id), _canonical(entry), hashlib.sha256
+        ).hexdigest()
         if not isinstance(entry_hash, str) or not hmac.compare_digest(
             entry_hash, expected
         ):
@@ -131,15 +136,17 @@ def _append_audit(action: str, report_id: str, actor: str) -> None:
     with audit_state.transaction(CARPETA_INFORMES):
         entries = _read_verified_audit()
         previous_hash = entries[-1]["entry_hash"] if entries else "0" * 64
+        audit_key_id, audit_key = current_audit_key()
         entry: dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": action,
             "report_id": report_id,
             "actor": actor,
             "previous_hash": previous_hash,
+            "audit_key_id": audit_key_id,
         }
         entry["entry_hash"] = hmac.new(
-            _decode_key("AUDIT_HMAC_KEY"), _canonical(entry), hashlib.sha256
+            audit_key, _canonical(entry), hashlib.sha256
         ).hexdigest()
         lines = [
             json.dumps(item, ensure_ascii=False, sort_keys=True) for item in entries
@@ -216,7 +223,7 @@ def crear_informe(
 ) -> str:
     """Create and encrypt report with original message content preserved."""
     try:
-        _decode_key("AUDIT_HMAC_KEY")
+        current_audit_key()
     except EvidenceSecurityError as exc:
         raise EvidenceSecurityError("Claves de auditoría no configuradas") from exc
 
