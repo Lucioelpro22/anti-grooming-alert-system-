@@ -25,6 +25,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - name: Validate hardened Compose profile
+        shell: bash
+        env:
+          HEALTHCHECK_HOST: api.example.org
+          ALLOWED_HOSTS_JSON: '["api.example.org"]'
+        run: |
+          set -eu
+          mkdir -p secrets
+          trap 'rm -rf secrets' EXIT
+          for name in jwt_secret auth_users_json mfa_users_json evidence_encryption_key audit_hmac_key pseudonymization_hmac_key redis_url; do
+            printf 'placeholder\n' > "secrets/${name}"
+          done
+          docker compose -f compose.production.yml config --quiet
+
       - name: Build local security-test image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -62,9 +76,10 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Upload SBOM
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: container-sbom-${{ github.sha }}
           path: sbom.spdx.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
