@@ -20,9 +20,7 @@ def test_production_requires_rediss():
 
 def test_production_accepts_authenticated_verified_tls():
     validate_redis_url(
-        "rediss://default:"
-        + "x"
-        + "@redis.example.org:6380/0"
+        "rediss://default:" + "x" + "@redis.example.org:6380/0"
         "?ssl_cert_reqs=required&ssl_check_hostname=true",
         production=True,
     )
@@ -41,12 +39,10 @@ def test_production_accepts_mtls_authentication():
 @pytest.mark.parametrize(
     "url",
     [
+        ("rediss://default:" + "x" + "@redis.example.org:6380/0?ssl_cert_reqs=none"),
         (
-            "rediss://default:" + "x"
-            + "@redis.example.org:6380/0?ssl_cert_reqs=none"
-        ),
-        (
-            "rediss://default:" + "x"
+            "rediss://default:"
+            + "x"
             + "@redis.example.org:6380/0?ssl_check_hostname=false"
         ),
         "rediss://default:" + "x" + "@localhost:6380/0",
