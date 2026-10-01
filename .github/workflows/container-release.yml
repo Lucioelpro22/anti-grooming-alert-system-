@@ -25,11 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Require main branch
+      - name: Validate release request
         shell: bash
         run: |
           set -euo pipefail
           test "${GITHUB_REF}" = "refs/heads/main"
+          if [[ ! "${RELEASE_TAG}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "Invalid container tag"
+            exit 1
+          fi
 
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -72,8 +76,6 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
       - name: Validate release tag
         shell: bash
