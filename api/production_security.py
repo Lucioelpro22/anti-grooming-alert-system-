@@ -183,9 +183,7 @@ def validate_production_security() -> None:
 
     environment = app_environment()
     try:
-        validate_client_ip_configuration(
-            production=environment == "production"
-        )
+        validate_client_ip_configuration(production=environment == "production")
     except ClientIPConfigurationError as exc:
         raise ProductionSecurityError(
             "Configuración de trusted proxy inválida"
