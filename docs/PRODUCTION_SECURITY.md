@@ -28,7 +28,7 @@ both a client certificate and client key for mTLS. Server certificate validation
 must remain enabled. Example:
 
 ```text
-rediss://default:<secret>@redis.example.org:6380/0?ssl_cert_reqs=required&ssl_check_hostname=true
+rediss://redis.example.org:6380/0?ssl_cert_reqs=required&ssl_check_hostname=true&ssl_certfile=/run/secrets/redis-client.crt&ssl_keyfile=/run/secrets/redis-client.key
 ```
 
 For private PKI, add the appropriate CA path supported by redis-py. Never set
