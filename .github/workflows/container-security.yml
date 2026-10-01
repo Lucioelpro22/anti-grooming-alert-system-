@@ -51,10 +51,23 @@ jobs:
           provenance: false
           sbom: false
 
-      - name: Verify runtime user
+      - name: Verify runtime hardening
+        shell: bash
         run: |
-          test "$(docker image inspect anti-grooming-alert-system:ci --format '{{.Config.User}}')" = "10001:10001"
-          docker run --rm --entrypoint /usr/bin/id anti-grooming-alert-system:ci -u | grep -qx '10001'
+          set -euo pipefail
+          image=anti-grooming-alert-system:ci
+          test "$(docker image inspect "$image" --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect "$image" --format '{{json .Config.Entrypoint}}')" = '["/bin/sh","/app/scripts/container-entrypoint.sh"]'
+          test "$(docker image inspect "$image" --format '{{.Config.StopSignal}}')" = "SIGTERM"
+          docker image inspect "$image" --format '{{json .Config.Healthcheck.Test}}' | grep -q '/health/ready'
+          docker run --rm --entrypoint /usr/bin/id "$image" -u | grep -qx '10001'
+          docker run --rm --entrypoint /bin/sh "$image" -ec '
+            test ! -e /opt/venv/bin/pip
+            test ! -e /usr/local/bin/pip
+            test ! -w /app/api
+            test ! -w /app/scripts
+            test ! -w /opt/venv
+          '
 
       - name: Generate image SBOM
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
