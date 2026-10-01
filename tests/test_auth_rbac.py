@@ -83,9 +83,7 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv(
         "SECURITY_AUDIT_STATE_DB",
         str(
-            tmp_path.parent
-            / (tmp_path.name + "-security-state")
-            / "checkpoint.sqlite"
+            tmp_path.parent / (tmp_path.name + "-security-state") / "checkpoint.sqlite"
         ),
     )
     REPORT_LIMITER.clear()
@@ -169,9 +167,7 @@ def test_auth_security_log_never_contains_login_secrets(client):
     assert events[-1]["request_id"]
 
 
-def test_login_fails_closed_when_security_audit_is_unavailable(
-    client, monkeypatch
-):
+def test_login_fails_closed_when_security_audit_is_unavailable(client, monkeypatch):
     log_dir = Path(os.environ["SECURITY_AUDIT_DIR"])
     monkeypatch.setenv(
         "SECURITY_AUDIT_STATE_DB",
@@ -201,7 +197,8 @@ def test_refresh_reuse_creates_critical_security_alert(client):
 
     events = security_audit.read_security_events()
     alert = next(
-        event for event in reversed(events)
+        event
+        for event in reversed(events)
         if event["event"] == "refresh_reuse_detected"
     )
     assert alert["severity"] == "critical"
