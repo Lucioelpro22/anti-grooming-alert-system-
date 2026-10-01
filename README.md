@@ -143,6 +143,22 @@ producción con varios workers debe usarse `SESSION_BACKEND=redis` con
 falla cerrada. `REFRESH_TOKEN_DAYS` controla la vida máxima del refresh entre
 1 y 30 días y vale 7 por defecto.
 
+### IP real detrás de proxies confiables
+
+Los headers `Forwarded`, `X-Forwarded-For` y `CF-Connecting-IP` se ignoran
+por defecto. Para usarlos hay que seleccionar explícitamente
+`CLIENT_IP_HEADER` y definir las redes del proxy inmediato en
+`TRUSTED_PROXY_CIDRS_JSON`. Una petición directa desde una IP no confiable no
+puede falsificar su identidad agregando esos headers.
+
+La IP resuelta se usa de forma uniforme en el rate limiting global, la detección
+de password spraying/credential stuffing y la auditoría de seguridad. Las
+cadenas XFF/Forwarded se recorren desde el proxy más cercano y se detienen en el
+primer salto no confiable.
+
+Configuración y patrones para Nginx, Cloudflare e ingress/load balancers:
+[docs/PRODUCTION_SECURITY.md](docs/PRODUCTION_SECURITY.md).
+
 ### Rate limiting distribuido de login y MFA
 
 Los fallos de contraseña y de MFA se evalúan en tres dimensiones simultáneas,
