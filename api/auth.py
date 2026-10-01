@@ -16,6 +16,7 @@ from pwdlib import PasswordHash
 
 from api.audit_key_management import current_audit_key, load_audit_keyring
 from api.audit_state import EvidenceSecurityError
+from api.client_ip import request_client_ip
 from api.jwt_key_management import (
     JWTKeyConfigurationError,
     JWTKeyNotFound,
@@ -461,7 +462,7 @@ class LoginRateLimiter:
             raise RuntimeError("Configuración de rate limit de login inválida") from exc
 
     def _keys(self, request: Request, username: str) -> dict[str, str]:
-        client = request.client.host if request.client else "unknown"
+        client = request_client_ip(request)
         normalized_username = username.strip().lower()
         return {
             "pair": opaque_login_key(client, normalized_username),
