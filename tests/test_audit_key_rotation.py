@@ -74,8 +74,7 @@ def test_rotation_preserves_legacy_history_and_signs_new_entries(
     rg._append_audit("rotated_event", "new-report", "new-actor")
 
     entries = [
-        json.loads(line)
-        for line in audit_path.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
     ]
     assert "audit_key_id" not in entries[0]
     assert entries[1]["audit_key_id"] == "v2"
