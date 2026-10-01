@@ -162,9 +162,5 @@ def test_security_audit_prefers_resolved_client_ip_over_proxy_peer(audit_env):
     )
 
     entry = security_audit.read_security_events()[-1]
-    assert entry["client_ip_ref"] == pseudonymize(
-        "security-ip:198.51.100.77"
-    )
-    assert entry["client_ip_ref"] != pseudonymize(
-        "security-ip:203.0.113.9"
-    )
+    assert entry["client_ip_ref"] == pseudonymize("security-ip:198.51.100.77")
+    assert entry["client_ip_ref"] != pseudonymize("security-ip:203.0.113.9")
