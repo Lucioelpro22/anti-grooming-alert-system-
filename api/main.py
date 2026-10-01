@@ -153,12 +153,25 @@ def login(
         LOGIN_LIMITER.check(request, form.username)
     except HTTPException as exc:
         if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
+            scope = getattr(exc, "rate_limit_scope", "pair")
+            if scope == "account":
+                event = "credential_stuffing_suspected"
+                severity = "critical"
+                reason = "account_scope"
+            elif scope == "client":
+                event = "password_spraying_suspected"
+                severity = "critical"
+                reason = "client_scope"
+            else:
+                event = "login_rate_limited"
+                severity = "warning"
+                reason = "pair_scope"
             _record_security_event_or_503(
-                "login_rate_limited",
+                event,
                 request=request,
                 username=form.username,
-                severity="warning",
-                reason="rate_limit",
+                severity=severity,
+                reason=reason,
             )
         else:
             _record_security_event_or_503(
