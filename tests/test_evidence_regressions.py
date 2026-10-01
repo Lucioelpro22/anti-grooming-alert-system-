@@ -23,6 +23,13 @@ def storage(tmp_path, monkeypatch):
     folder = tmp_path / "reports"
     monkeypatch.setattr(rg, "CARPETA_INFORMES", folder)
     monkeypatch.setenv("AUDIT_STATE_DB", str(tmp_path / "state" / "audit.sqlite"))
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_DIR", str(tmp_path / "security-audit")
+    )
+    monkeypatch.setenv(
+        "SECURITY_AUDIT_STATE_DB",
+        str(tmp_path / "security-state" / "checkpoint.sqlite"),
+    )
     monkeypatch.setenv("EVIDENCE_ENCRYPTION_KEY", base64.b64encode(b"e" * 32).decode())
     monkeypatch.setenv("AUDIT_HMAC_KEY", base64.b64encode(b"a" * 32).decode())
     monkeypatch.setenv(
