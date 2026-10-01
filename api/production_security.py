@@ -154,9 +154,7 @@ def _validate_database_url() -> None:
         raise ProductionSecurityError("DATABASE_URL inválida") from exc
 
     if parsed.scheme not in {"postgresql", "postgresql+psycopg"} or not parsed.hostname:
-        raise ProductionSecurityError(
-            "DATABASE_URL de producción debe usar PostgreSQL"
-        )
+        raise ProductionSecurityError("DATABASE_URL de producción debe usar PostgreSQL")
     if _is_loopback(parsed.hostname):
         raise ProductionSecurityError(
             "DATABASE_URL de producción no admite loopback/local"
