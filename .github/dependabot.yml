@@ -2,7 +2,6 @@ version: 2
 updates:
   - package-ecosystem: pip
     directories:
-      - "/"
       - "/api"
       - "/cuaderno-seguridad-digital"
       - "/escudo-privacidad-digital"
