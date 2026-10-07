@@ -3,6 +3,7 @@ name: Primera Comunidad de Ayuda
 on:
   push:
     paths:
+      - "VERSION"
       - "primera-comunidad-ayuda/**"
       - ".github/workflows/primera-comunidad.yml"
   pull_request:

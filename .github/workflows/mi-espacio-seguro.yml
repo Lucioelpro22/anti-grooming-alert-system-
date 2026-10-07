@@ -2,6 +2,7 @@ name: Mi Espacio Seguro
 on:
   push:
     paths:
+      - "VERSION"
       - "mi-espacio-seguro/**"
       - ".github/workflows/mi-espacio-seguro.yml"
   pull_request:

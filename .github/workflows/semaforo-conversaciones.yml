@@ -3,6 +3,7 @@ name: Semaforo Conversaciones Digitales
 on:
   push:
     paths:
+      - "VERSION"
       - "semaforo-conversaciones-digitales/**"
       - ".github/workflows/semaforo-conversaciones.yml"
   pull_request:
