@@ -2,6 +2,7 @@ name: Organizador Emociones
 on:
   push:
     paths:
+      - "VERSION"
       - "organizador-emociones/**"
       - ".github/workflows/organizador-emociones.yml"
   pull_request:

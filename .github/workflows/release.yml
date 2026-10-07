@@ -1,72 +1,128 @@
 name: Publish release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "VERSION"
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact reviewed main commit (40 lowercase hexadecimal characters)
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 concurrency:
   group: publish-release
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Tag and publish release
+  validate:
+    name: Validate exact release revision
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    env:
+      RELEASE_SHA: ${{ inputs.commit_sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out source
+      - name: Validate selected revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$RELEASE_SHA" = "$GITHUB_SHA"
+      - name: Check out reviewed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
-
-      - name: Read version
+          ref: ${{ inputs.commit_sha }}
+          persist-credentials: false
+      - name: Validate version and matching notes
         id: version
         shell: bash
         run: |
           set -euo pipefail
           VERSION="$(tr -d '[:space:]' < VERSION)"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid VERSION: $VERSION"
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test -s "RELEASE_NOTES_v${VERSION}.md"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure tag does not already exist
-        id: tagcheck
+      - name: Require successful workflows for this exact main revision
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ steps.version.outputs.tag }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "$TAG already exists; nothing to publish."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&event=push&per_page=100" \
+            > "$RUNNER_TEMP/release-checks.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-      - name: Create and push tag
-        if: steps.tagcheck.outputs.exists == 'false'
+          required = {
+              "security.yml", "container-security.yml", "codeql.yml",
+              "zizmor.yml", "scorecard.yml", "cuaderno-seguridad.yml",
+              "escudo-privacidad.yml", "laboratorio-huella.yml",
+              "libro-recuerdos.yml", "mi-espacio-seguro.yml",
+              "organizador-emociones.yml", "primera-comunidad.yml",
+              "rincon-metas.yml", "semaforo-conversaciones.yml",
+          }
+          pages = json.loads((Path(os.environ["RUNNER_TEMP"]) / "release-checks.json").read_text())
+          latest = {}
+          for page in pages:
+              for run in page["workflow_runs"]:
+                  if (run["head_sha"] != os.environ["RELEASE_SHA"]
+                      or run["head_branch"] != "main" or run["event"] != "push"):
+                      continue
+                  name = run["path"].removeprefix(".github/workflows/")
+                  if name in required and (name not in latest or run["id"] > latest[name]["id"]):
+                      latest[name] = run
+          failures = sorted(name for name in required if name not in latest
+              or latest[name]["status"] != "completed" or latest[name]["conclusion"] != "success")
+          if failures:
+              raise SystemExit("Release gate failed; missing, pending or failed workflows: " + ", ".join(failures))
+          print("All required workflows passed for the exact selected main commit.")
+          PY
+
+  publish:
+    name: Publish validated release
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ inputs.commit_sha }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+    steps:
+      - name: Check out validated source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.commit_sha }}
+          persist-credentials: false
+      - name: Refuse existing immutable tag and release
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ steps.version.outputs.tag }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" "$GITHUB_SHA" -m "Release $TAG"
-          git push origin "$TAG"
+          gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$RELEASE_TAG" \
+            > "$RUNNER_TEMP/release-tags.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-      - name: Publish GitHub Release
-        if: steps.tagcheck.outputs.exists == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-          VERSION: ${{ steps.version.outputs.version }}
+          refs = json.loads((Path(os.environ["RUNNER_TEMP"]) / "release-tags.json").read_text())
+          if any(ref["ref"] == "refs/tags/" + os.environ["RELEASE_TAG"] for ref in refs):
+              raise SystemExit("Release tag already exists; publication is immutable.")
+          PY
+      - name: Publish release with matching reviewed notes
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$TAG"             --target "$GITHUB_SHA"             --title "v$VERSION — Primera versión estable etiquetada"             --notes-file "RELEASE_NOTES_v1.0.0.md"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$RELEASE_SHA" > /dev/null
+          gh release create "$RELEASE_TAG" --verify-tag \
+            --title "$RELEASE_TAG — Autenticación y despliegue endurecidos" \
+            --notes-file "RELEASE_NOTES_${RELEASE_TAG}.md"

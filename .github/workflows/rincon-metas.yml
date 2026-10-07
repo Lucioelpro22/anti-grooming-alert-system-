@@ -2,6 +2,7 @@ name: Rincon Metas
 on:
   push:
     paths:
+      - "VERSION"
       - "rincon-metas-crecimiento/**"
       - ".github/workflows/rincon-metas.yml"
   pull_request:

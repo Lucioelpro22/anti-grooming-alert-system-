@@ -3,6 +3,7 @@ name: Laboratorio Huella Digital
 on:
   push:
     paths:
+      - "VERSION"
       - "laboratorio-huella-digital/**"
       - ".github/workflows/laboratorio-huella.yml"
   pull_request:

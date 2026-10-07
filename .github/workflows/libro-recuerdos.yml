@@ -3,6 +3,7 @@ name: Libro Recuerdos y Suenos
 on:
   push:
     paths:
+      - "VERSION"
       - "libro-recuerdos-suenos/**"
       - ".github/workflows/libro-recuerdos.yml"
   pull_request:

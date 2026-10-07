@@ -3,6 +3,7 @@ name: Cuaderno Seguridad Digital
 on:
   push:
     paths:
+      - "VERSION"
       - "cuaderno-seguridad-digital/**"
       - ".github/workflows/cuaderno-seguridad.yml"
   pull_request:

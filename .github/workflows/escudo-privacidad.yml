@@ -3,6 +3,7 @@ name: Escudo Privacidad Digital
 on:
   push:
     paths:
+      - "VERSION"
       - "escudo-privacidad-digital/**"
       - ".github/workflows/escudo-privacidad.yml"
   pull_request:
