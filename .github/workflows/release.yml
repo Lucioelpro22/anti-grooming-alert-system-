@@ -121,6 +121,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" \
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$RELEASE_SHA" > /dev/null
+          gh release create "$RELEASE_TAG" --verify-tag \
             --title "$RELEASE_TAG — Autenticación y despliegue endurecidos" \
             --notes-file "RELEASE_NOTES_${RELEASE_TAG}.md"
