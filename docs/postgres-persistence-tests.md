@@ -21,7 +21,7 @@ Install `api/requirements.txt` and pytest in a Python 3.12 environment, then run
 from the repository root:
 
 ```powershell
-$env:TEST_POSTGRES_URL = 'postgresql+psycopg://test_user:test_password@localhost:5432/test_database'
+$env:TEST_POSTGRES_URL = 'postgresql+psycopg://test_user@localhost:5432/test_database'
 python -m pytest -q tests/test_postgres_persistence.py
 Remove-Item Env:TEST_POSTGRES_URL
 ```
