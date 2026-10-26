@@ -2,7 +2,7 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import MappingProxyType
 
@@ -81,7 +81,7 @@ def get_policy(country_code: str) -> JurisdictionPolicy:
 
 def retention_deadline(created_at: datetime, policy: JurisdictionPolicy) -> datetime:
     if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
-    return created_at.astimezone(timezone.utc) + timedelta(
+        created_at = created_at.replace(tzinfo=UTC)
+    return created_at.astimezone(UTC) + timedelta(
         days=policy.recommended_retention_days
     )

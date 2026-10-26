@@ -2,7 +2,7 @@ import json
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Annotated
 
@@ -215,7 +215,7 @@ def create_access_token(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Servicio de sesiones no disponible",
             ) from exc
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = now + timedelta(minutes=ACCESS_TOKEN_MINUTES)
     payload = {
         "sub": user.username,

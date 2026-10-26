@@ -1,6 +1,6 @@
 """Evidence lifecycle rules; legal hold always wins over deletion."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 
 
@@ -14,7 +14,7 @@ class EvidenceStatus(str, Enum):
 def retention_deadline(created_at: datetime, retention_days: int) -> datetime:
     if retention_days <= 0:
         raise ValueError("retention_days debe ser positivo")
-    timestamp = created_at.astimezone(timezone.utc)
+    timestamp = created_at.astimezone(UTC)
     return timestamp + timedelta(days=retention_days)
 
 

@@ -14,6 +14,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  postgres-persistence:
+    name: PostgreSQL persistence integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+        env:
+          POSTGRES_USER: persistence_test
+          POSTGRES_DB: persistence_test
+          # Disposable CI service, reachable only through the runner's loopback.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U persistence_test -d persistence_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
+      - name: Install API dependencies and test runner
+        run: python -m pip install -r api/requirements.txt pytest==9.1.1
+      - name: Run PostgreSQL persistence integration tests
+        env:
+          TEST_POSTGRES_URL: postgresql+psycopg://persistence_test@127.0.0.1:5432/persistence_test
+        run: python -m pytest -q tests/test_postgres_persistence.py
+
   test-and-scan:
     name: Test and security scan
     runs-on: ubuntu-latest

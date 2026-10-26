@@ -7,7 +7,7 @@ import os
 import re
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -138,7 +138,7 @@ def _append_audit(action: str, report_id: str, actor: str) -> None:
         previous_hash = entries[-1]["entry_hash"] if entries else "0" * 64
         audit_key_id, audit_key = current_audit_key()
         entry: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "action": action,
             "report_id": report_id,
             "actor": actor,
@@ -160,7 +160,7 @@ def _render_report(
     mensaje: Any, analisis: RiskAnalysis, ip_info: dict, perfil: str, report_id: str
 ) -> str:
     """Render report text. Original message content is stored separately in ciphertext."""
-    fecha_emision = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S UTC")
+    fecha_emision = datetime.now(UTC).strftime("%d/%m/%Y %H:%M:%S UTC")
     contenido = f"""
 ======================================================================
                     INFORME TÉCNICO DE DETECCIÓN
@@ -230,7 +230,7 @@ def crear_informe(
     # New reports use a complete canonical UUID. Legacy 32-hex IDs remain
     # readable for backwards compatibility, but are never generated again.
     report_id = str(uuid.uuid4())
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     authenticated_metadata: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "id": report_id,

@@ -1,7 +1,7 @@
 import base64
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import jwt
@@ -422,7 +422,7 @@ def test_jwt_rotation_keeps_legacy_token_valid_until_key_is_retired(
     rotated_secret = (
         "rotated-test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     legacy_token = jwt.encode(
         {
             "sub": "analyst-a",
@@ -460,7 +460,7 @@ def test_jwt_rotation_keeps_legacy_token_valid_until_key_is_retired(
 
 def test_unknown_jwt_kid_is_rejected(client):
     secret = "test-secret-that-is-longer-than-32-bytes"  # pragma: allowlist secret
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     forged_header_token = jwt.encode(
         {
             "sub": "analyst-a",
@@ -490,7 +490,7 @@ def test_invalid_jwt_keyring_fails_closed(client, monkeypatch):
 
 
 def test_expired_token_is_rejected(client):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expired = jwt.encode(
         {
             "sub": "analyst-a",
