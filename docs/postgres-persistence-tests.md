@@ -15,7 +15,11 @@ This CI job must pass before treating PostgreSQL compatibility as verified.
 
 The CI job installs `requirements-postgres-ci.txt` with `--require-hashes` and
 `--only-binary=:all:`. This lock includes the API dependencies, pytest, and their
-transitive dependencies for Python 3.12 on Linux. Regenerate it whenever the API
+transitive dependencies for Python 3.12 on Linux. The install also includes
+`api/requirements.txt`, so stale runtime versions fail resolution rather than
+silently testing the old environment, and runs `pip check`. Both files are passed
+as requirements because the API pins include extras, which pip does not allow in
+constraint files. Regenerate the lock whenever the API
 pins or the test runner change; do not edit package hashes by hand:
 
 ```sh
@@ -25,25 +29,16 @@ uv pip compile requirements-postgres-ci.in --python-version 3.12 --python-platfo
 Review the resulting versions and hashes and run the PostgreSQL job after each
 update. Scorecard also runs on PRs changing this lock or the integration workflow.
 
-## Review evidence and remaining checks
+## Required checks after an update
 
-On commit `e604440bd060a049bc2fa8cc2dd64d00dcc47fe5`, all 15 workflows passed,
-including 303 ordinary tests (2 database tests skipped) and 2 tests in the real
-PostgreSQL job. Those results do not validate subsequent commits.
+Run Security and quality, Scorecard and GitHub Actions security analysis on the
+new head. Inspect workflow conclusions and Code Scanning annotations, and resolve
+review threads only after their alerts are confirmed fixed. Prior test results
+do not validate subsequent commits.
 
-Successful Scorecard execution and SARIF upload do not mean there are no alerts.
-The Code Scanning check on that commit was neutral: it reported a medium
-Pinned-Dependencies alert and could not compare `supply-chain/branch-protection`
-and `supply-chain/online-scm` configurations with main. The two missing
-configurations remain a coverage limitation until a new scan establishes their
-status; no missing result should be interpreted as a passing check. PR triggers
-are experimental upstream. Do not add a privileged token or suppress alerts to
-make the comparison green.
-
-After applying CI changes, rerun Security and quality, Scorecard and GitHub Actions
-security analysis on the new head. Inspect both workflow conclusions and Code
-Scanning annotations, and resolve the existing review threads only after their
-alerts are confirmed fixed. No merge is authorized by these changes.
+Scorecard intentionally analyzes local files on pull requests and the complete
+repository on main. See [Scorecard analysis modes](scorecard-analysis.md) for the
+resulting comparison limitation and the required post-merge verification.
 
 Use a dedicated disposable test database. Its role must have permission to create
 and drop schemas. Each test creates a random `persistence_test_*` schema and removes
