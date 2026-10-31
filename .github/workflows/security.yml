@@ -36,14 +36,17 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: api/requirements.txt
+          cache-dependency-path: requirements-postgres-ci.txt
       - name: Install API dependencies and test runner
-        run: python -m pip install -r api/requirements.txt pytest==9.1.1
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-postgres-ci.txt
       - name: Run PostgreSQL persistence integration tests
         env:
           TEST_POSTGRES_URL: postgresql+psycopg://persistence_test@127.0.0.1:5432/persistence_test
@@ -56,9 +59,11 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
