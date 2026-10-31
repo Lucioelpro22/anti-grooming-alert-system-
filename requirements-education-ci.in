@@ -1,0 +1,14 @@
+# Shared Linux/Python 3.12 environment for all nine educational projects.
+-r cuaderno-seguridad-digital/requirements.txt
+-r escudo-privacidad-digital/requirements.txt
+-r laboratorio-huella-digital/requirements.txt
+-r libro-recuerdos-suenos/requirements.txt
+-r mi-espacio-seguro/requirements.txt
+-r organizador-emociones/requirements.txt
+-r primera-comunidad-ayuda/requirements.txt
+-r rincon-metas-crecimiento/requirements.txt
+-r semaforo-conversaciones-digitales/requirements.txt
+ruff==0.17.3
+pip-audit==2.10.1
+# Keep the audit dependency available on the GitHub runner's package index.
+filelock==4.2.5

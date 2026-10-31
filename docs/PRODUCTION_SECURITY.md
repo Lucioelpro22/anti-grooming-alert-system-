@@ -245,8 +245,8 @@ marker and never prints secret values.
 
 ## Actualización de FastAPI 0.143.0 y telemetría
 
-La API y los nueve subproyectos educativos usan FastAPI 0.143.0. Esta versión
-requiere activación explícita para configurar automáticamente exportadores de
+La API y los nueve subproyectos educativos usan FastAPI 0.162.0. Desde 0.143.0,
+se requiere activación explícita para configurar automáticamente exportadores de
 OpenTelemetry a partir de variables `OTEL_*`. El repositorio no configura
 exportadores ni activa este comportamiento.
 

@@ -1,0 +1,10 @@
+# Python 3.12 / Linux API quality and security environment.
+-r requirements-postgres-ci.in
+bandit
+detect-secrets
+httpx2
+mypy
+pip-audit
+ruff
+# Keep the shared audit dependency available on the GitHub runner package index.
+filelock==4.2.5
