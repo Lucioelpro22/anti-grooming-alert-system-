@@ -10,6 +10,10 @@ on:
       - "api/requirements.txt"
       - "requirements-postgres-ci.in"
       - "requirements-postgres-ci.txt"
+      - "requirements-security-ci.in"
+      - "requirements-security-ci.txt"
+      - "requirements-education-ci.in"
+      - "requirements-education-ci.txt"
   push:
     branches: [main]
   schedule:

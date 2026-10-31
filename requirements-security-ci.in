@@ -1,0 +1,8 @@
+# Python 3.12 / Linux API quality and security environment.
+-r requirements-postgres-ci.in
+bandit
+detect-secrets
+httpx2
+mypy
+pip-audit
+ruff

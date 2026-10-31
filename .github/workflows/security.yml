@@ -68,14 +68,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: api/requirements.txt
+          cache-dependency-path: |
+            api/requirements.txt
+            requirements-security-ci.txt
 
       - name: Install runtime and security tools
         id: install
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r api/requirements.txt
-          python -m pip install bandit detect-secrets httpx2 mypy pip-audit pytest ruff
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-security-ci.txt -r api/requirements.txt
           python -m pip check
 
       - name: Check formatting and lint
