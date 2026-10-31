@@ -1,0 +1,3 @@
+# Python 3.12 / Linux integration environment; runtime pins remain authoritative.
+-r api/requirements.txt
+pytest==9.1.1

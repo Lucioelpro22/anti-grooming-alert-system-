@@ -1,6 +1,6 @@
 import unicodedata
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from ipaddress import IPv4Address, IPv6Address
 from typing import Annotated
@@ -418,7 +418,7 @@ def analizar_mensaje(
         )
 
     if not mensaje.fecha_hora:
-        mensaje.fecha_hora = datetime.now(timezone.utc)
+        mensaje.fecha_hora = datetime.now(UTC)
 
     resultado_patrones = detect_patterns.evaluar_texto(mensaje.contenido)
     datos_ip = (

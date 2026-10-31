@@ -1,5 +1,5 @@
 import ipaddress
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def analizar_ip(ip_str: str) -> dict:
@@ -16,7 +16,7 @@ def analizar_ip(ip_str: str) -> dict:
             "version": f"IPv{version}",
             "ambito": "Red local/privada" if es_privada else "Internet pública",
             "reservada_sistema": es_reservada,
-            "analisis_fecha": datetime.now(timezone.utc).isoformat(),
+            "analisis_fecha": datetime.now(UTC).isoformat(),
             "nota": "Para ubicación precisa consultar base del proveedor mediante mandamiento judicial"
             if not es_privada
             else "Dirección de red interna — requiere seguimiento local",
@@ -26,5 +26,5 @@ def analizar_ip(ip_str: str) -> dict:
             "ip": ip_str,
             "valida": False,
             "mensaje": "Formato de IP inválido",
-            "analisis_fecha": datetime.now(timezone.utc).isoformat(),
+            "analisis_fecha": datetime.now(UTC).isoformat(),
         }

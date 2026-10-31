@@ -241,3 +241,25 @@ marker and never prints secret values.
     protected central logging/SIEM destination.
 12. Rotate credentials and cryptographic keys on a documented schedule and after
     any suspected exposure.
+
+
+## Actualización de FastAPI 0.143.0 y telemetría
+
+La API y los nueve subproyectos educativos usan FastAPI 0.143.0. Esta versión
+requiere activación explícita para configurar automáticamente exportadores de
+OpenTelemetry a partir de variables `OTEL_*`. El repositorio no configura
+exportadores ni activa este comportamiento.
+
+Antes de actualizar un despliegue, revisá también sus variables externas. Si
+dependía de esa configuración automática, definí
+`FASTAPI_OTEL_AUTO_CONFIGURE=true` para conservarla y verificá que una solicitud
+de prueba produzca una traza en el colector esperado. Como alternativa de código,
+FastAPI admite `FastAPI(telemetry={"auto_configure": True})`. Si el despliegue
+configura sus propios proveedores y exportadores, no necesita esta activación.
+Los despliegues sin telemetría pueden conservar su configuración actual.
+
+Validá la instalación de dependencias y `python -m pip check`, la suite de cada
+proyecto desde su propio directorio y las rutas de salud, portada y recursos
+estáticos. Las pruebas HTTP existentes no verifican la recepción de trazas.
+
+Referencia: [notas de FastAPI 0.143.0](https://github.com/fastapi/fastapi/releases/tag/0.143.0).

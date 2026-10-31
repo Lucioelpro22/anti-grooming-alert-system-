@@ -1,6 +1,6 @@
 import base64
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -88,7 +88,7 @@ def test_legal_hold_cannot_be_deleted():
     assert not can_transition(
         EvidenceStatus.LEGAL_HOLD, EvidenceStatus.DELETION_PENDING
     )
-    created = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    created = datetime(2026, 1, 1, tzinfo=UTC)
     assert retention_deadline(created, 30).day == 31
 
 

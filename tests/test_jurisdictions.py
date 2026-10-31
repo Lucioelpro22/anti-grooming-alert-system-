@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -23,7 +23,7 @@ def test_unknown_jurisdiction_fails_closed():
 
 def test_retention_deadline_is_utc_and_configured():
     policy = get_policy("US")
-    created = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    created = datetime(2026, 1, 1, tzinfo=UTC)
     assert (
         retention_deadline(created, policy).isoformat() == "2026-01-31T00:00:00+00:00"
     )
